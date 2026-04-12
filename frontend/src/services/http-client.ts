@@ -22,6 +22,8 @@ export async function apiRequest<T>(
   const response = await sendRequest(path, options, authState.token);
 
   if (response.status === 401 && authState.refreshToken) {
+    let refreshedAccessToken = "";
+
     try {
       const tokenSet = await refreshKeycloakToken(authState.refreshToken);
       persistAuthState({
@@ -31,16 +33,23 @@ export async function apiRequest<T>(
         role: authState.role,
       });
 
-      const retried = await sendRequest(path, options, tokenSet.accessToken);
-      if (!retried.ok) {
-        throw await toRequestError(retried);
-      }
-
-      return (await retried.json()) as T;
+      refreshedAccessToken = tokenSet.accessToken;
     } catch {
       clearAuthState();
       throw new Error("Session expired. Please sign in again.");
     }
+
+    const retried = await sendRequest(path, options, refreshedAccessToken);
+    if (retried.status === 401) {
+      clearAuthState();
+      throw new Error("Session expired. Please sign in again.");
+    }
+
+    if (!retried.ok) {
+      throw await toRequestError(retried);
+    }
+
+    return (await retried.json()) as T;
   }
 
   if (!response.ok) {

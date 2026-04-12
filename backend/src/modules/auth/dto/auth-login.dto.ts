@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsString, IsUrl } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class AuthLoginDto {
   @IsString()
@@ -10,5 +11,6 @@ export class AuthLoginDto {
   codeVerifier: string;
 
   @IsUrl({ require_tld: false })
+  @Transform(({ obj }) => obj.redirectUri ?? obj.redirect_uri)
   redirectUri: string;
 }

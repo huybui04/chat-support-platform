@@ -40,6 +40,17 @@ export class JwtAuthGuard implements CanActivate {
     try {
       user = await verifyAndBuildAuthUser(token);
     } catch {
+      // Log underlying verification error for debugging
+      try {
+        // attempt to get more info by re-running to capture error
+        await verifyAndBuildAuthUser(token);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(
+          'JWT verification failed:',
+          err instanceof Error ? err.message : err,
+        );
+      }
       throw new UnauthorizedException('Invalid token signature');
     }
 

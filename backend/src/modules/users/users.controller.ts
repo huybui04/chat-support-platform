@@ -28,7 +28,7 @@ export class UsersController {
   @Get('me')
   @Roles(UserRole.AGENT, UserRole.SUPERVISOR)
   async me(@CurrentUser() user: AuthUser) {
-    const currentUser = await this.usersService.findByKeycloakId(user.sub);
+    const currentUser = await this.usersService.ensureFromAuthUser(user);
     return apiSuccess(currentUser);
   }
 

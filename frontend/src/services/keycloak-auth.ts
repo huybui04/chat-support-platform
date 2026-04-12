@@ -102,7 +102,7 @@ export async function exchangeKeycloakCodeForToken(
 
   const payload = {
     code,
-    redirect_uri: redirectUri,
+    redirectUri: redirectUri,
     codeVerifier: verifier,
   };
 

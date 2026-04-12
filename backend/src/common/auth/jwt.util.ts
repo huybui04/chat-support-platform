@@ -7,6 +7,7 @@ interface JwtPayload {
   email?: string;
   name?: string;
   preferred_username?: string;
+  azp?: string;
   exp?: number;
   realm_access?: unknown;
   resource_access?: unknown;
@@ -129,10 +130,33 @@ function toJwtPayload(payload: JWTPayload): JwtPayload {
       typeof payload.preferred_username === 'string'
         ? payload.preferred_username
         : undefined,
+    azp: typeof payload.azp === 'string' ? payload.azp : undefined,
     exp: typeof payload.exp === 'number' ? payload.exp : undefined,
     realm_access: payload.realm_access,
     resource_access: payload.resource_access,
   };
+}
+
+function parseAudienceConfig(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function isAudienceValidationError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.name === 'JWTClaimValidationFailed' &&
+    error.message.toLowerCase().includes('aud')
+  );
 }
 
 function getKeycloakJwks() {
@@ -152,7 +176,8 @@ function getKeycloakJwks() {
 
   return {
     issuer,
-    audience: process.env.KEYCLOAK_AUDIENCE?.trim(),
+    audiences: parseAudienceConfig(process.env.KEYCLOAK_AUDIENCE),
+    clientId: process.env.KEYCLOAK_CLIENT_ID?.trim(),
     jwks: cachedJwks,
   };
 }
@@ -167,11 +192,31 @@ export async function verifyAndBuildAuthUser(
     return buildAuthUser(token);
   }
 
-  const verifyOptions = keycloak.audience
-    ? { issuer: keycloak.issuer, audience: keycloak.audience }
+  const verifyOptions = keycloak.audiences.length
+    ? { issuer: keycloak.issuer, audience: keycloak.audiences }
     : { issuer: keycloak.issuer };
 
-  const { payload } = await jwtVerify(token, keycloak.jwks, verifyOptions);
-  const mappedPayload = toJwtPayload(payload);
-  return buildAuthUserFromPayload(mappedPayload);
+  try {
+    const { payload } = await jwtVerify(token, keycloak.jwks, verifyOptions);
+    return buildAuthUserFromPayload(toJwtPayload(payload));
+  } catch (error) {
+    // Some Keycloak setups put the frontend client in `azp` while `aud` is `account`.
+    if (
+      !keycloak.audiences.length ||
+      !keycloak.clientId ||
+      !isAudienceValidationError(error)
+    ) {
+      throw error;
+    }
+
+    const { payload } = await jwtVerify(token, keycloak.jwks, {
+      issuer: keycloak.issuer,
+    });
+
+    if (payload.azp !== keycloak.clientId) {
+      throw error;
+    }
+
+    return buildAuthUserFromPayload(toJwtPayload(payload));
+  }
 }

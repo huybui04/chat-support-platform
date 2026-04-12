@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -63,6 +64,64 @@ export class UsersService {
     return user;
   }
 
+  async ensureFromAuthUser(authUser: AuthUser): Promise<User> {
+    const nextRole = this.resolveRoleFromAuthUser(authUser);
+    const nextEmail = authUser.email?.trim().toLowerCase();
+    const nextFullName = authUser.fullName?.trim() || nextEmail;
+
+    if (!nextEmail || !nextFullName) {
+      throw new BadRequestException('Authenticated user is missing email.');
+    }
+
+    const existingByKeycloakId = await this.usersRepository.findOne({
+      where: { keycloakId: authUser.sub },
+    });
+
+    if (existingByKeycloakId) {
+      const hasChanges =
+        existingByKeycloakId.email !== nextEmail ||
+        existingByKeycloakId.fullName !== nextFullName ||
+        existingByKeycloakId.role !== nextRole;
+
+      if (!hasChanges) {
+        return existingByKeycloakId;
+      }
+
+      const updated = this.usersRepository.merge(existingByKeycloakId, {
+        email: nextEmail,
+        fullName: nextFullName,
+        role: nextRole,
+      });
+
+      return this.usersRepository.save(updated);
+    }
+
+    const existingByEmail = await this.usersRepository.findOne({
+      where: { email: nextEmail },
+    });
+
+    if (existingByEmail) {
+      const updated = this.usersRepository.merge(existingByEmail, {
+        keycloakId: authUser.sub,
+        fullName: nextFullName,
+        role: nextRole,
+      });
+
+      return this.usersRepository.save(updated);
+    }
+
+    const created = this.usersRepository.create({
+      keycloakId: authUser.sub,
+      email: nextEmail,
+      fullName: nextFullName,
+      role: nextRole,
+      isActive: true,
+      isOnline: false,
+    });
+
+    return this.usersRepository.save(created);
+  }
+
   async create(payload: CreateUserDto): Promise<User> {
     const user = this.usersRepository.create({
       keycloakId: payload.keycloakId,
@@ -96,7 +155,7 @@ export class UsersService {
     currentUser: AuthUser,
   ): Promise<User> {
     if (!currentUser.roles.includes(UserRole.SUPERVISOR)) {
-      const requester = await this.findByKeycloakId(currentUser.sub);
+      const requester = await this.ensureFromAuthUser(currentUser);
       if (requester.id !== id) {
         throw new ForbiddenException(
           'Agents can only update their own status.',
@@ -114,5 +173,17 @@ export class UsersService {
     });
 
     return updatedUser;
+  }
+
+  private resolveRoleFromAuthUser(authUser: AuthUser): UserRole {
+    if (authUser.roles.includes(UserRole.SUPERVISOR)) {
+      return UserRole.SUPERVISOR;
+    }
+
+    if (authUser.roles.includes(UserRole.AGENT)) {
+      return UserRole.AGENT;
+    }
+
+    throw new ForbiddenException('User role is not allowed.');
   }
 }
