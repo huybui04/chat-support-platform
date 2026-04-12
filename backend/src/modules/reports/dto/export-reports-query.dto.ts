@@ -10,6 +10,11 @@ export enum ReportsExportKind {
   CAMPAIGN_DETAIL = 'campaign-detail',
 }
 
+export enum ReportsExportFormat {
+  CSV = 'csv',
+  JSON = 'json',
+}
+
 export class ExportReportsQueryDto extends ListReportsQueryDto {
   @IsEnum(ReportsExportKind)
   kind: ReportsExportKind;
@@ -22,4 +27,8 @@ export class ExportReportsQueryDto extends ListReportsQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   all?: boolean = false;
+
+  @IsOptional()
+  @IsEnum(ReportsExportFormat)
+  format?: ReportsExportFormat = ReportsExportFormat.CSV;
 }

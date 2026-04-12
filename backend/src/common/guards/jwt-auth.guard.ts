@@ -45,7 +45,6 @@ export class JwtAuthGuard implements CanActivate {
         // attempt to get more info by re-running to capture error
         await verifyAndBuildAuthUser(token);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error(
           'JWT verification failed:',
           err instanceof Error ? err.message : err,

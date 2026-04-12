@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -14,6 +18,7 @@ import {
 } from '../../database/entities';
 import {
   ExportReportsQueryDto,
+  ReportsExportFormat,
   ReportsExportKind,
 } from './dto/export-reports-query.dto';
 import {
@@ -31,6 +36,8 @@ interface GroupedSessionCount {
   status: ChatSessionStatus;
   count: string;
 }
+
+const MAX_EXPORT_ROWS = 20000;
 
 @Injectable()
 export class ReportsService {
@@ -299,6 +306,196 @@ export class ReportsService {
       fileName: `campaign-detail-${detail.campaignId}-${timestamp}.csv`,
       csv: this.toCsv(rows),
     };
+  }
+
+  async buildJsonExport(query: ExportReportsQueryDto) {
+    const timestamp = new Date().toISOString().replace(/[.:]/g, '-');
+    const window = query.window ?? ReportsTimeWindow.ALL;
+
+    if (query.kind === ReportsExportKind.CAMPAIGNS) {
+      const items = query.all
+        ? await this.getAllCampaignReports(query.window)
+        : (
+            await this.getCampaignsOverview({
+              page: query.page,
+              limit: query.limit,
+              window: query.window,
+            })
+          ).items;
+
+      return {
+        fileName: `campaign-overview-${timestamp}.json`,
+        json: JSON.stringify(
+          {
+            kind: ReportsExportKind.CAMPAIGNS,
+            format: ReportsExportFormat.JSON,
+            window,
+            all: Boolean(query.all),
+            items,
+          },
+          null,
+          2,
+        ),
+      };
+    }
+
+    if (query.kind === ReportsExportKind.AGENTS) {
+      const items = query.all
+        ? await this.getAllAgentReports(query.window)
+        : (
+            await this.getAgentsReport({
+              page: query.page,
+              limit: query.limit,
+              window: query.window,
+            })
+          ).items;
+
+      return {
+        fileName: `agent-performance-${timestamp}.json`,
+        json: JSON.stringify(
+          {
+            kind: ReportsExportKind.AGENTS,
+            format: ReportsExportFormat.JSON,
+            window,
+            all: Boolean(query.all),
+            items,
+          },
+          null,
+          2,
+        ),
+      };
+    }
+
+    if (query.kind === ReportsExportKind.SESSIONS) {
+      const summary = await this.getSessionsReport({ window: query.window });
+      return {
+        fileName: `sessions-summary-${timestamp}.json`,
+        json: JSON.stringify(
+          {
+            kind: ReportsExportKind.SESSIONS,
+            format: ReportsExportFormat.JSON,
+            window,
+            all: Boolean(query.all),
+            summary,
+          },
+          null,
+          2,
+        ),
+      };
+    }
+
+    if (!query.campaignId) {
+      throw new NotFoundException(
+        'campaignId is required for campaign detail export',
+      );
+    }
+
+    const detail = await this.getCampaignDetail(query.campaignId, {
+      window: query.window,
+    });
+
+    return {
+      fileName: `campaign-detail-${detail.campaignId}-${timestamp}.json`,
+      json: JSON.stringify(
+        {
+          kind: ReportsExportKind.CAMPAIGN_DETAIL,
+          format: ReportsExportFormat.JSON,
+          window,
+          all: Boolean(query.all),
+          detail,
+        },
+        null,
+        2,
+      ),
+    };
+  }
+
+  getCampaignExportHeader() {
+    return [
+      'campaign_id',
+      'campaign_name',
+      'total_contacts',
+      'pending_sessions',
+      'active_sessions',
+      'completed_sessions',
+      'abandoned_sessions',
+      'window',
+    ];
+  }
+
+  getAgentsExportHeader() {
+    return [
+      'agent_id',
+      'full_name',
+      'email',
+      'handled_sessions',
+      'completed_sessions',
+      'avg_session_duration_seconds',
+      'is_online',
+      'window',
+    ];
+  }
+
+  async *iterateCampaignExportRows(window?: ReportsTimeWindow) {
+    const total = await this.getCampaignExportTotal(window);
+    if (total > MAX_EXPORT_ROWS) {
+      throw new BadRequestException(
+        `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
+      );
+    }
+
+    const limit = 200;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const windowLabel = window ?? ReportsTimeWindow.ALL;
+
+    for (let page = 1; page <= totalPages; page += 1) {
+      const batch = await this.getCampaignsOverview({ page, limit, window });
+      for (const campaign of batch.items) {
+        yield [
+          campaign.campaignId,
+          campaign.name,
+          String(campaign.totalContacts),
+          String(campaign.sessions.pending),
+          String(campaign.sessions.active),
+          String(campaign.sessions.completed),
+          String(campaign.sessions.abandoned),
+          windowLabel,
+        ];
+      }
+    }
+  }
+
+  async *iterateAgentExportRows(window?: ReportsTimeWindow) {
+    const total = await this.getAgentExportTotal(window);
+    if (total > MAX_EXPORT_ROWS) {
+      throw new BadRequestException(
+        `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
+      );
+    }
+
+    const limit = 200;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const windowLabel = window ?? ReportsTimeWindow.ALL;
+
+    for (let page = 1; page <= totalPages; page += 1) {
+      const batch = await this.getAgentsReport({ page, limit, window });
+      for (const agent of batch.items) {
+        yield [
+          agent.agentId,
+          agent.fullName,
+          agent.email,
+          String(agent.handledSessions),
+          String(agent.completedSessions),
+          String(Math.round(agent.avgSessionDurationSeconds ?? 0)),
+          agent.isOnline ? 'online' : 'offline',
+          windowLabel,
+        ];
+      }
+    }
+  }
+
+  toCsvLine(cells: string[]) {
+    return `${cells.map((value) => this.escapeCsvCell(value)).join(',')}\n`;
   }
 
   async getCampaignDetail(id: string, query: ListReportsQueryDto) {
@@ -608,7 +805,32 @@ export class ReportsService {
     return `"${value.replace(/"/g, '""')}"`;
   }
 
+  private async getCampaignExportTotal(window?: ReportsTimeWindow) {
+    const result = await this.getCampaignsOverview({
+      page: 1,
+      limit: 1,
+      window,
+    });
+    return result.meta.total;
+  }
+
+  private async getAgentExportTotal(window?: ReportsTimeWindow) {
+    const result = await this.getAgentsReport({ page: 1, limit: 1, window });
+    return result.meta.total;
+  }
+
   private async getAllCampaignReports(window?: ReportsTimeWindow) {
+    const firstPage = await this.getCampaignsOverview({
+      page: 1,
+      limit: 1,
+      window,
+    });
+    if (firstPage.meta.total > MAX_EXPORT_ROWS) {
+      throw new BadRequestException(
+        `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
+      );
+    }
+
     const limit = 200;
     let page = 1;
     let total = 0;
@@ -627,6 +849,13 @@ export class ReportsService {
   }
 
   private async getAllAgentReports(window?: ReportsTimeWindow) {
+    const firstPage = await this.getAgentsReport({ page: 1, limit: 1, window });
+    if (firstPage.meta.total > MAX_EXPORT_ROWS) {
+      throw new BadRequestException(
+        `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
+      );
+    }
+
     const limit = 200;
     let page = 1;
     let total = 0;
