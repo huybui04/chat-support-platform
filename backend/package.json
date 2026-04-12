@@ -16,6 +16,8 @@
     "migration:run": "npm run typeorm migration:run",
     "migration:revert": "npm run typeorm migration:revert",
     "migration:show": "npm run typeorm migration:show",
+    "seed:test-data": "ts-node --transpile-only src/database/seeds/test-data.seed.ts",
+    "seed:heavy-data": "ts-node --transpile-only src/database/seeds/heavy-data.seed.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
