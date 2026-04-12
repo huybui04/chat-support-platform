@@ -7,12 +7,12 @@
 
 ## 1. 🧠 Context
 
-| Mục | Chi tiết |
-|-----|----------|
-| **Loại hệ thống** | Web-based Customer Support Chat Platform (Campaign-based Outbound Chat) |
-| **Domain** | Customer Service / Contact Center |
-| **Actors** | Supervisor (Admin), Support Agent, Customer |
-| **Mục tiêu** | Cung cấp nền tảng chat hỗ trợ khách hàng theo chiến dịch (campaign), cho phép quản trị viên tạo và quản lý chiến dịch, tổng đài viên xử lý chat real-time với khách hàng thông qua giao diện web tập trung |
+| Mục               | Chi tiết                                                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Loại hệ thống** | Web-based Customer Support Chat Platform (Campaign-based Outbound Chat)                                                                                                                                    |
+| **Domain**        | Customer Service / Contact Center                                                                                                                                                                          |
+| **Actors**        | Supervisor (Admin), Support Agent, Customer                                                                                                                                                                |
+| **Mục tiêu**      | Cung cấp nền tảng chat hỗ trợ khách hàng theo chiến dịch (campaign), cho phép quản trị viên tạo và quản lý chiến dịch, tổng đài viên xử lý chat real-time với khách hàng thông qua giao diện web tập trung |
 
 ### Actors & Vai trò
 
@@ -40,15 +40,15 @@
 
 ### Tech Stack
 
-| Layer | Technology | Mục đích |
-|-------|------------|----------|
-| **Frontend** | ReactJS + TypeScript | Admin Portal & Agent Portal |
-| **Backend** | NestJS (Node.js) | REST API + WebSocket Gateway |
-| **Database** | PostgreSQL | Lưu trữ dữ liệu chính |
-| **Auth** | Keycloak | Authentication & Authorization (RBAC) |
-| **Realtime** | WebSocket (Socket.IO) | Chat real-time |
-| **Deployment** | Docker + Kubernetes | Container orchestration |
-| **Tools** | Git, GitHub, Postman, VS Code | Development workflow |
+| Layer          | Technology                    | Mục đích                              |
+| -------------- | ----------------------------- | ------------------------------------- |
+| **Frontend**   | ReactJS + TypeScript          | Admin Portal & Agent Portal           |
+| **Backend**    | NestJS (Node.js)              | REST API + WebSocket Gateway          |
+| **Database**   | PostgreSQL                    | Lưu trữ dữ liệu chính                 |
+| **Auth**       | Keycloak                      | Authentication & Authorization (RBAC) |
+| **Realtime**   | WebSocket (Socket.IO)         | Chat real-time                        |
+| **Deployment** | Docker + Kubernetes           | Container orchestration               |
+| **Tools**      | Git, GitHub, Postman, VS Code | Development workflow                  |
 
 ### Tổ chức hệ thống
 
@@ -190,121 +190,131 @@ users ──────────< team_members >──────── tea
 ### 3.2 Schema Chi Tiết
 
 #### Table: `users`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK, DEFAULT gen_random_uuid() | |
-| `keycloak_id` | VARCHAR(255) | UQ, NOT NULL | ID từ Keycloak |
-| `email` | VARCHAR(255) | UQ, NOT NULL | |
-| `full_name` | VARCHAR(255) | NOT NULL | |
-| `role` | ENUM('supervisor','agent') | NOT NULL | |
-| `is_active` | BOOLEAN | DEFAULT true | |
-| `is_online` | BOOLEAN | DEFAULT false | Trạng thái online |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column        | Type                       | Constraints                   | Mô tả             |
+| ------------- | -------------------------- | ----------------------------- | ----------------- |
+| `id`          | UUID                       | PK, DEFAULT gen_random_uuid() |                   |
+| `keycloak_id` | VARCHAR(255)               | UQ, NOT NULL                  | ID từ Keycloak    |
+| `email`       | VARCHAR(255)               | UQ, NOT NULL                  |                   |
+| `full_name`   | VARCHAR(255)               | NOT NULL                      |                   |
+| `role`        | ENUM('supervisor','agent') | NOT NULL                      |                   |
+| `is_active`   | BOOLEAN                    | DEFAULT true                  |                   |
+| `is_online`   | BOOLEAN                    | DEFAULT false                 | Trạng thái online |
+| `created_at`  | TIMESTAMP                  | DEFAULT NOW()                 |                   |
+| `updated_at`  | TIMESTAMP                  | DEFAULT NOW()                 |                   |
 
 ---
 
 #### Table: `teams`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `name` | VARCHAR(255) | NOT NULL | |
-| `description` | TEXT | NULLABLE | |
-| `created_by` | UUID | FK → users.id | |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column        | Type         | Constraints   | Mô tả |
+| ------------- | ------------ | ------------- | ----- |
+| `id`          | UUID         | PK            |       |
+| `name`        | VARCHAR(255) | NOT NULL      |       |
+| `description` | TEXT         | NULLABLE      |       |
+| `created_by`  | UUID         | FK → users.id |       |
+| `created_at`  | TIMESTAMP    | DEFAULT NOW() |       |
+| `updated_at`  | TIMESTAMP    | DEFAULT NOW() |       |
 
 ---
 
-#### Table: `team_members` *(n-n: users ↔ teams)*
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `team_id` | UUID | FK → teams.id, NOT NULL | |
-| `user_id` | UUID | FK → users.id, NOT NULL | |
-| `joined_at` | TIMESTAMP | DEFAULT NOW() | |
-| — | — | UNIQUE(team_id, user_id) | Không trùng |
+#### Table: `team_members` _(n-n: users ↔ teams)_
+
+| Column      | Type      | Constraints              | Mô tả       |
+| ----------- | --------- | ------------------------ | ----------- |
+| `id`        | UUID      | PK                       |             |
+| `team_id`   | UUID      | FK → teams.id, NOT NULL  |             |
+| `user_id`   | UUID      | FK → users.id, NOT NULL  |             |
+| `joined_at` | TIMESTAMP | DEFAULT NOW()            |             |
+| —           | —         | UNIQUE(team_id, user_id) | Không trùng |
 
 ---
 
 #### Table: `campaigns`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `name` | VARCHAR(255) | NOT NULL | |
-| `description` | TEXT | NULLABLE | |
-| `status` | ENUM('draft','active','paused','completed') | DEFAULT 'draft' | |
-| `channel` | ENUM('web','whatsapp') | DEFAULT 'web' | |
-| `start_date` | DATE | NULLABLE | |
-| `end_date` | DATE | NULLABLE | |
-| `created_by` | UUID | FK → users.id | |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column        | Type                                        | Constraints     | Mô tả |
+| ------------- | ------------------------------------------- | --------------- | ----- |
+| `id`          | UUID                                        | PK              |       |
+| `name`        | VARCHAR(255)                                | NOT NULL        |       |
+| `description` | TEXT                                        | NULLABLE        |       |
+| `status`      | ENUM('draft','active','paused','completed') | DEFAULT 'draft' |       |
+| `channel`     | ENUM('web','whatsapp')                      | DEFAULT 'web'   |       |
+| `start_date`  | DATE                                        | NULLABLE        |       |
+| `end_date`    | DATE                                        | NULLABLE        |       |
+| `created_by`  | UUID                                        | FK → users.id   |       |
+| `created_at`  | TIMESTAMP                                   | DEFAULT NOW()   |       |
+| `updated_at`  | TIMESTAMP                                   | DEFAULT NOW()   |       |
 
 ---
 
-#### Table: `campaign_teams` *(n-n: campaigns ↔ teams)*
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `campaign_id` | UUID | FK → campaigns.id | |
-| `team_id` | UUID | FK → teams.id | |
-| — | — | UNIQUE(campaign_id, team_id) | |
+#### Table: `campaign_teams` _(n-n: campaigns ↔ teams)_
+
+| Column        | Type | Constraints                  | Mô tả |
+| ------------- | ---- | ---------------------------- | ----- |
+| `id`          | UUID | PK                           |       |
+| `campaign_id` | UUID | FK → campaigns.id            |       |
+| `team_id`     | UUID | FK → teams.id                |       |
+| —             | —    | UNIQUE(campaign_id, team_id) |       |
 
 ---
 
-#### Table: `campaign_agents` *(n-n: campaigns ↔ users)*
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `campaign_id` | UUID | FK → campaigns.id | |
-| `agent_id` | UUID | FK → users.id | |
-| `assigned_at` | TIMESTAMP | DEFAULT NOW() | |
-| — | — | UNIQUE(campaign_id, agent_id) | |
+#### Table: `campaign_agents` _(n-n: campaigns ↔ users)_
+
+| Column        | Type      | Constraints                   | Mô tả |
+| ------------- | --------- | ----------------------------- | ----- |
+| `id`          | UUID      | PK                            |       |
+| `campaign_id` | UUID      | FK → campaigns.id             |       |
+| `agent_id`    | UUID      | FK → users.id                 |       |
+| `assigned_at` | TIMESTAMP | DEFAULT NOW()                 |       |
+| —             | —         | UNIQUE(campaign_id, agent_id) |       |
 
 ---
 
 #### Table: `contacts`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `full_name` | VARCHAR(255) | NOT NULL | |
-| `phone` | VARCHAR(50) | NULLABLE | |
-| `email` | VARCHAR(255) | NULLABLE | |
-| `whatsapp_id` | VARCHAR(100) | NULLABLE | |
-| `metadata` | JSONB | NULLABLE | Dữ liệu bổ sung từ CSV |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column        | Type         | Constraints   | Mô tả                  |
+| ------------- | ------------ | ------------- | ---------------------- |
+| `id`          | UUID         | PK            |                        |
+| `full_name`   | VARCHAR(255) | NOT NULL      |                        |
+| `phone`       | VARCHAR(50)  | NULLABLE      |                        |
+| `email`       | VARCHAR(255) | NULLABLE      |                        |
+| `whatsapp_id` | VARCHAR(100) | NULLABLE      |                        |
+| `metadata`    | JSONB        | NULLABLE      | Dữ liệu bổ sung từ CSV |
+| `created_at`  | TIMESTAMP    | DEFAULT NOW() |                        |
 
 ---
 
-#### Table: `campaign_contacts` *(n-n: campaigns ↔ contacts)*
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `campaign_id` | UUID | FK → campaigns.id | |
-| `contact_id` | UUID | FK → contacts.id | |
-| `status` | ENUM('pending','assigned','completed','failed') | DEFAULT 'pending' | |
-| `import_batch` | VARCHAR(100) | NULLABLE | Tracking batch import CSV |
-| `assigned_at` | TIMESTAMP | NULLABLE | |
-| — | — | UNIQUE(campaign_id, contact_id) | |
+#### Table: `campaign_contacts` _(n-n: campaigns ↔ contacts)_
+
+| Column         | Type                                            | Constraints                     | Mô tả                     |
+| -------------- | ----------------------------------------------- | ------------------------------- | ------------------------- |
+| `id`           | UUID                                            | PK                              |                           |
+| `campaign_id`  | UUID                                            | FK → campaigns.id               |                           |
+| `contact_id`   | UUID                                            | FK → contacts.id                |                           |
+| `status`       | ENUM('pending','assigned','completed','failed') | DEFAULT 'pending'               |                           |
+| `import_batch` | VARCHAR(100)                                    | NULLABLE                        | Tracking batch import CSV |
+| `assigned_at`  | TIMESTAMP                                       | NULLABLE                        |                           |
+| —              | —                                               | UNIQUE(campaign_id, contact_id) |                           |
 
 ---
 
 #### Table: `chat_sessions`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `campaign_id` | UUID | FK → campaigns.id, NOT NULL | |
-| `contact_id` | UUID | FK → contacts.id, NOT NULL | |
-| `agent_id` | UUID | FK → users.id, NULLABLE | NULL = chưa assign |
-| `channel` | ENUM('web','whatsapp') | NOT NULL | |
-| `status` | ENUM('pending','active','completed','abandoned') | DEFAULT 'pending' | |
-| `started_at` | TIMESTAMP | NULLABLE | Khi agent bắt đầu |
-| `ended_at` | TIMESTAMP | NULLABLE | |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column        | Type                                             | Constraints                 | Mô tả              |
+| ------------- | ------------------------------------------------ | --------------------------- | ------------------ |
+| `id`          | UUID                                             | PK                          |                    |
+| `campaign_id` | UUID                                             | FK → campaigns.id, NOT NULL |                    |
+| `contact_id`  | UUID                                             | FK → contacts.id, NOT NULL  |                    |
+| `agent_id`    | UUID                                             | FK → users.id, NULLABLE     | NULL = chưa assign |
+| `channel`     | ENUM('web','whatsapp')                           | NOT NULL                    |                    |
+| `status`      | ENUM('pending','active','completed','abandoned') | DEFAULT 'pending'           |                    |
+| `started_at`  | TIMESTAMP                                        | NULLABLE                    | Khi agent bắt đầu  |
+| `ended_at`    | TIMESTAMP                                        | NULLABLE                    |                    |
+| `created_at`  | TIMESTAMP                                        | DEFAULT NOW()               |                    |
+| `updated_at`  | TIMESTAMP                                        | DEFAULT NOW()               |                    |
 
 **Relationships:**
+
 - `campaign_id` → campaigns (1-n)
 - `contact_id` → contacts (1-n)
 - `agent_id` → users (1-n, nullable)
@@ -312,48 +322,50 @@ users ──────────< team_members >──────── tea
 ---
 
 #### Table: `chat_messages`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `session_id` | UUID | FK → chat_sessions.id, NOT NULL | |
-| `sender_type` | ENUM('agent','customer','system') | NOT NULL | |
-| `sender_id` | UUID | NULLABLE | FK → users.id nếu agent |
-| `content` | TEXT | NOT NULL | |
-| `message_type` | ENUM('text','image','file','system') | DEFAULT 'text' | |
-| `attachment_url` | VARCHAR(500) | NULLABLE | |
-| `is_read` | BOOLEAN | DEFAULT false | |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column           | Type                                 | Constraints                     | Mô tả                   |
+| ---------------- | ------------------------------------ | ------------------------------- | ----------------------- |
+| `id`             | UUID                                 | PK                              |                         |
+| `session_id`     | UUID                                 | FK → chat_sessions.id, NOT NULL |                         |
+| `sender_type`    | ENUM('agent','customer','system')    | NOT NULL                        |                         |
+| `sender_id`      | UUID                                 | NULLABLE                        | FK → users.id nếu agent |
+| `content`        | TEXT                                 | NOT NULL                        |                         |
+| `message_type`   | ENUM('text','image','file','system') | DEFAULT 'text'                  |                         |
+| `attachment_url` | VARCHAR(500)                         | NULLABLE                        |                         |
+| `is_read`        | BOOLEAN                              | DEFAULT false                   |                         |
+| `created_at`     | TIMESTAMP                            | DEFAULT NOW()                   |                         |
 
 ---
 
 #### Table: `csv_import_logs`
-| Column | Type | Constraints | Mô tả |
-|--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `campaign_id` | UUID | FK → campaigns.id | |
-| `file_name` | VARCHAR(255) | NOT NULL | |
-| `total_rows` | INTEGER | DEFAULT 0 | |
-| `success_rows` | INTEGER | DEFAULT 0 | |
-| `failed_rows` | INTEGER | DEFAULT 0 | |
-| `status` | ENUM('processing','completed','failed') | | |
-| `error_log` | JSONB | NULLABLE | Chi tiết lỗi từng row |
-| `imported_by` | UUID | FK → users.id | |
-| `created_at` | TIMESTAMP | DEFAULT NOW() | |
+
+| Column         | Type                                    | Constraints       | Mô tả                 |
+| -------------- | --------------------------------------- | ----------------- | --------------------- |
+| `id`           | UUID                                    | PK                |                       |
+| `campaign_id`  | UUID                                    | FK → campaigns.id |                       |
+| `file_name`    | VARCHAR(255)                            | NOT NULL          |                       |
+| `total_rows`   | INTEGER                                 | DEFAULT 0         |                       |
+| `success_rows` | INTEGER                                 | DEFAULT 0         |                       |
+| `failed_rows`  | INTEGER                                 | DEFAULT 0         |                       |
+| `status`       | ENUM('processing','completed','failed') |                   |                       |
+| `error_log`    | JSONB                                   | NULLABLE          | Chi tiết lỗi từng row |
+| `imported_by`  | UUID                                    | FK → users.id     |                       |
+| `created_at`   | TIMESTAMP                               | DEFAULT NOW()     |                       |
 
 ---
 
 ### 3.3 Quan hệ tóm tắt
 
-| Quan hệ | Loại | Mô tả |
-|---------|------|-------|
-| users ↔ teams | n-n (qua team_members) | 1 user thuộc nhiều team |
-| campaigns ↔ teams | n-n (qua campaign_teams) | 1 campaign giao cho nhiều team |
-| campaigns ↔ users | n-n (qua campaign_agents) | Agent được assign vào campaign |
-| campaigns ↔ contacts | n-n (qua campaign_contacts) | Danh sách liên lạc theo campaign |
-| campaigns → chat_sessions | 1-n | 1 campaign có nhiều session |
-| contacts → chat_sessions | 1-n | 1 contact có thể có nhiều session |
-| users → chat_sessions | 1-n | 1 agent xử lý nhiều session |
-| chat_sessions → chat_messages | 1-n | 1 session có nhiều tin nhắn |
+| Quan hệ                       | Loại                        | Mô tả                             |
+| ----------------------------- | --------------------------- | --------------------------------- |
+| users ↔ teams                 | n-n (qua team_members)      | 1 user thuộc nhiều team           |
+| campaigns ↔ teams             | n-n (qua campaign_teams)    | 1 campaign giao cho nhiều team    |
+| campaigns ↔ users             | n-n (qua campaign_agents)   | Agent được assign vào campaign    |
+| campaigns ↔ contacts          | n-n (qua campaign_contacts) | Danh sách liên lạc theo campaign  |
+| campaigns → chat_sessions     | 1-n                         | 1 campaign có nhiều session       |
+| contacts → chat_sessions      | 1-n                         | 1 contact có thể có nhiều session |
+| users → chat_sessions         | 1-n                         | 1 agent xử lý nhiều session       |
+| chat_sessions → chat_messages | 1-n                         | 1 session có nhiều tin nhắn       |
 
 ---
 
@@ -461,75 +473,77 @@ CLIENT                          SERVER
 ## 5. 🔌 API Design
 
 ### Base URL: `/api/v1`
+
 ### Auth Header: `Authorization: Bearer <JWT>`
 
 ---
 
 ### 5.1 Authentication
 
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| POST | `/auth/login` | Login qua Keycloak |
-| POST | `/auth/refresh` | Refresh access token |
-| POST | `/auth/logout` | Logout |
+| Method | Endpoint        | Mô tả                |
+| ------ | --------------- | -------------------- |
+| POST   | `/auth/login`   | Login qua Keycloak   |
+| POST   | `/auth/refresh` | Refresh access token |
+| POST   | `/auth/logout`  | Logout               |
 
 ---
 
 ### 5.2 Users & Agents
 
-| Method | Endpoint | Role | Mô tả |
-|--------|----------|------|-------|
-| GET | `/users` | supervisor | Lấy danh sách users |
-| GET | `/users/:id` | supervisor | Chi tiết user |
-| POST | `/users` | supervisor | Tạo agent mới |
-| PATCH | `/users/:id` | supervisor | Cập nhật thông tin |
-| DELETE | `/users/:id` | supervisor | Vô hiệu hóa user |
-| PATCH | `/users/:id/status` | agent | Cập nhật trạng thái online |
+| Method | Endpoint            | Role       | Mô tả                      |
+| ------ | ------------------- | ---------- | -------------------------- |
+| GET    | `/users`            | supervisor | Lấy danh sách users        |
+| GET    | `/users/:id`        | supervisor | Chi tiết user              |
+| POST   | `/users`            | supervisor | Tạo agent mới              |
+| PATCH  | `/users/:id`        | supervisor | Cập nhật thông tin         |
+| DELETE | `/users/:id`        | supervisor | Vô hiệu hóa user           |
+| PATCH  | `/users/:id/status` | agent      | Cập nhật trạng thái online |
 
 ---
 
 ### 5.3 Teams
 
-| Method | Endpoint | Role | Mô tả |
-|--------|----------|------|-------|
-| GET | `/teams` | supervisor | Danh sách teams |
-| POST | `/teams` | supervisor | Tạo team |
-| PATCH | `/teams/:id` | supervisor | Cập nhật team |
-| DELETE | `/teams/:id` | supervisor | Xóa team |
-| POST | `/teams/:id/members` | supervisor | Thêm agent vào team |
+| Method | Endpoint                     | Role       | Mô tả               |
+| ------ | ---------------------------- | ---------- | ------------------- |
+| GET    | `/teams`                     | supervisor | Danh sách teams     |
+| POST   | `/teams`                     | supervisor | Tạo team            |
+| PATCH  | `/teams/:id`                 | supervisor | Cập nhật team       |
+| DELETE | `/teams/:id`                 | supervisor | Xóa team            |
+| POST   | `/teams/:id/members`         | supervisor | Thêm agent vào team |
 | DELETE | `/teams/:id/members/:userId` | supervisor | Xóa agent khỏi team |
 
 ---
 
 ### 5.4 Campaigns
 
-| Method | Endpoint | Role | Mô tả |
-|--------|----------|------|-------|
-| GET | `/campaigns` | supervisor | Danh sách campaigns |
-| POST | `/campaigns` | supervisor | Tạo campaign |
-| GET | `/campaigns/:id` | supervisor | Chi tiết campaign |
-| PATCH | `/campaigns/:id` | supervisor | Cập nhật campaign |
-| DELETE | `/campaigns/:id` | supervisor | Xóa campaign |
-| PATCH | `/campaigns/:id/status` | supervisor | Thay đổi trạng thái |
-| POST | `/campaigns/:id/agents` | supervisor | Gán agent vào campaign |
-| DELETE | `/campaigns/:id/agents/:agentId` | supervisor | Gỡ agent |
-| POST | `/campaigns/:id/teams` | supervisor | Gán team vào campaign |
-| GET | `/campaigns/:id/stats` | supervisor | Thống kê campaign |
+| Method | Endpoint                         | Role       | Mô tả                  |
+| ------ | -------------------------------- | ---------- | ---------------------- |
+| GET    | `/campaigns`                     | supervisor | Danh sách campaigns    |
+| POST   | `/campaigns`                     | supervisor | Tạo campaign           |
+| GET    | `/campaigns/:id`                 | supervisor | Chi tiết campaign      |
+| PATCH  | `/campaigns/:id`                 | supervisor | Cập nhật campaign      |
+| DELETE | `/campaigns/:id`                 | supervisor | Xóa campaign           |
+| PATCH  | `/campaigns/:id/status`          | supervisor | Thay đổi trạng thái    |
+| POST   | `/campaigns/:id/agents`          | supervisor | Gán agent vào campaign |
+| DELETE | `/campaigns/:id/agents/:agentId` | supervisor | Gỡ agent               |
+| POST   | `/campaigns/:id/teams`           | supervisor | Gán team vào campaign  |
+| GET    | `/campaigns/:id/stats`           | supervisor | Thống kê campaign      |
 
 ---
 
 ### 5.5 Contacts
 
-| Method | Endpoint | Role | Mô tả |
-|--------|----------|------|-------|
-| GET | `/contacts` | supervisor | Danh sách contacts |
-| POST | `/contacts` | supervisor | Tạo contact thủ công |
-| PATCH | `/contacts/:id` | supervisor | Cập nhật contact |
-| POST | `/campaigns/:id/contacts/import` | supervisor | Import CSV |
-| GET | `/campaigns/:id/contacts` | supervisor | Contacts của campaign |
-| GET | `/campaigns/:id/contacts/import-logs` | supervisor | Lịch sử import |
+| Method | Endpoint                              | Role       | Mô tả                 |
+| ------ | ------------------------------------- | ---------- | --------------------- |
+| GET    | `/contacts`                           | supervisor | Danh sách contacts    |
+| POST   | `/contacts`                           | supervisor | Tạo contact thủ công  |
+| PATCH  | `/contacts/:id`                       | supervisor | Cập nhật contact      |
+| POST   | `/campaigns/:id/contacts/import`      | supervisor | Import CSV            |
+| GET    | `/campaigns/:id/contacts`             | supervisor | Contacts của campaign |
+| GET    | `/campaigns/:id/contacts/import-logs` | supervisor | Lịch sử import        |
 
 **Request Body CSV Import:**
+
 ```json
 // multipart/form-data
 {
@@ -546,18 +560,19 @@ CLIENT                          SERVER
 
 ### 5.6 Chat Sessions
 
-| Method | Endpoint | Role | Mô tả |
-|--------|----------|------|-------|
-| GET | `/sessions` | agent, supervisor | Danh sách sessions |
-| GET | `/sessions?status=pending` | agent | Sessions đang chờ |
-| GET | `/sessions?status=active` | agent | Sessions đang hoạt động |
-| GET | `/sessions/:id` | agent | Chi tiết session |
-| POST | `/sessions/:id/accept` | agent | Nhận session |
-| POST | `/sessions/:id/end` | agent | Kết thúc session |
-| GET | `/sessions/:id/messages` | agent | Lịch sử tin nhắn |
-| POST | `/sessions` | system | Tạo session mới (từ widget) |
+| Method | Endpoint                   | Role              | Mô tả                       |
+| ------ | -------------------------- | ----------------- | --------------------------- |
+| GET    | `/sessions`                | agent, supervisor | Danh sách sessions          |
+| GET    | `/sessions?status=pending` | agent             | Sessions đang chờ           |
+| GET    | `/sessions?status=active`  | agent             | Sessions đang hoạt động     |
+| GET    | `/sessions/:id`            | agent             | Chi tiết session            |
+| POST   | `/sessions/:id/accept`     | agent             | Nhận session                |
+| POST   | `/sessions/:id/end`        | agent             | Kết thúc session            |
+| GET    | `/sessions/:id/messages`   | agent             | Lịch sử tin nhắn            |
+| POST   | `/sessions`                | system            | Tạo session mới (từ widget) |
 
 **Query params cho GET `/sessions`:**
+
 ```
 ?status=pending|active|completed
 &campaign_id=uuid
@@ -569,14 +584,39 @@ CLIENT                          SERVER
 
 ### 5.7 Reports
 
-| Method | Endpoint | Role | Mô tả |
-|--------|----------|------|-------|
-| GET | `/reports/campaigns` | supervisor | Tổng quan campaigns |
-| GET | `/reports/campaigns/:id` | supervisor | Chi tiết 1 campaign |
-| GET | `/reports/agents` | supervisor | Hiệu suất agents |
-| GET | `/reports/sessions` | supervisor | Thống kê sessions |
+| Method | Endpoint                 | Role       | Mô tả                           |
+| ------ | ------------------------ | ---------- | ------------------------------- |
+| GET    | `/reports/campaigns`     | supervisor | Tổng quan campaigns             |
+| GET    | `/reports/campaigns/:id` | supervisor | Chi tiết 1 campaign             |
+| GET    | `/reports/agents`        | supervisor | Hiệu suất agents                |
+| GET    | `/reports/sessions`      | supervisor | Thống kê sessions               |
+| GET    | `/reports/export`        | supervisor | Export báo cáo ra file CSV/JSON |
+
+**Query params dùng cho Reports API:**
+
+```
+window=24h|7d|30d|all
+page=1&limit=20
+```
+
+**Query params cho GET `/reports/export`:**
+
+```
+kind=campaigns|agents|sessions|campaign-detail
+format=csv|json
+window=24h|7d|30d|all
+all=true|false
+campaignId=<uuid>   # required nếu kind=campaign-detail
+```
+
+**Ghi chú export:**
+
+- `all=true` cho `campaigns` và `agents` sẽ gom toàn bộ dữ liệu nhiều trang ở backend.
+- Export CSV với `all=true` cho `campaigns|agents` được stream theo từng dòng để giảm memory.
+- Backend có ngưỡng an toàn số dòng export all; nếu vượt ngưỡng sẽ trả lỗi yêu cầu thu hẹp `window` hoặc export phân trang.
 
 **Response mẫu `/reports/campaigns/:id`:**
+
 ```json
 {
   "campaign_id": "uuid",
@@ -599,23 +639,23 @@ CLIENT                          SERVER
 
 **Namespace:** `/chat`
 
-| Event (Client → Server) | Payload | Mô tả |
-|--------------------------|---------|-------|
-| `join_session` | `{ sessionId }` | Vào phòng chat |
-| `leave_session` | `{ sessionId }` | Rời phòng |
-| `send_message` | `{ sessionId, content, messageType }` | Gửi tin nhắn |
-| `typing_start` | `{ sessionId }` | Đang gõ |
-| `typing_stop` | `{ sessionId }` | Ngừng gõ |
-| `end_session` | `{ sessionId }` | Kết thúc session |
+| Event (Client → Server) | Payload                               | Mô tả            |
+| ----------------------- | ------------------------------------- | ---------------- |
+| `join_session`          | `{ sessionId }`                       | Vào phòng chat   |
+| `leave_session`         | `{ sessionId }`                       | Rời phòng        |
+| `send_message`          | `{ sessionId, content, messageType }` | Gửi tin nhắn     |
+| `typing_start`          | `{ sessionId }`                       | Đang gõ          |
+| `typing_stop`           | `{ sessionId }`                       | Ngừng gõ         |
+| `end_session`           | `{ sessionId }`                       | Kết thúc session |
 
-| Event (Server → Client) | Payload | Mô tả |
-|--------------------------|---------|-------|
-| `new_message` | `{ message }` | Tin nhắn mới |
-| `session_assigned` | `{ session }` | Session được gán |
-| `session_ended` | `{ sessionId }` | Session kết thúc |
-| `user_typing` | `{ sessionId, senderType }` | Thông báo đang gõ |
-| `new_session_pending` | `{ session }` | Session mới chờ xử lý |
-| `agent_status_changed` | `{ agentId, isOnline }` | Trạng thái agent |
+| Event (Server → Client) | Payload                     | Mô tả                 |
+| ----------------------- | --------------------------- | --------------------- |
+| `new_message`           | `{ message }`               | Tin nhắn mới          |
+| `session_assigned`      | `{ session }`               | Session được gán      |
+| `session_ended`         | `{ sessionId }`             | Session kết thúc      |
+| `user_typing`           | `{ sessionId, senderType }` | Thông báo đang gõ     |
+| `new_session_pending`   | `{ session }`               | Session mới chờ xử lý |
+| `agent_status_changed`  | `{ agentId, isOnline }`     | Trạng thái agent      |
 
 ---
 
@@ -737,6 +777,7 @@ Mở VS Code → Extensions (Ctrl+Shift+X) → Cài đặt:
 ```
 
 **Đăng nhập GitHub Copilot:**
+
 - `Ctrl+Shift+P` → "GitHub Copilot: Sign In"
 - Đăng nhập tài khoản GitHub đã có Copilot subscription
 
@@ -824,7 +865,7 @@ VITE_KEYCLOAK_CLIENT_ID=frontend-client
 
 ```yaml
 # docker-compose.yml
-version: '3.8'
+version: "3.8"
 services:
   postgres:
     image: postgres:15
@@ -883,55 +924,55 @@ docker-compose up -d
 💡 Ví dụ các prompt hiệu quả:
 
 1. Generate Entity:
-   "Generate a TypeORM entity for chat_sessions table with these columns: 
-    id (UUID PK), campaign_id (FK), contact_id (FK), agent_id (nullable FK), 
+   "Generate a TypeORM entity for chat_sessions table with these columns:
+    id (UUID PK), campaign_id (FK), contact_id (FK), agent_id (nullable FK),
     status (enum: pending/active/completed), created_at, updated_at"
 
 2. Generate Service:
-   "Create a NestJS service for campaign management with methods: 
-    findAll with pagination, findById, create, update, softDelete. 
+   "Create a NestJS service for campaign management with methods:
+    findAll with pagination, findById, create, update, softDelete.
     Use TypeORM repository pattern."
 
 3. Generate DTO:
-   "Create class-validator DTO for creating a campaign with fields: 
-    name (required string), channel (enum web/whatsapp), 
+   "Create class-validator DTO for creating a campaign with fields:
+    name (required string), channel (enum web/whatsapp),
     description (optional), startDate (optional date)"
 
 4. Generate WebSocket Gateway:
-   "Create NestJS WebSocket gateway for chat with events: 
-    join_session, send_message, typing_start, end_session. 
+   "Create NestJS WebSocket gateway for chat with events:
+    join_session, send_message, typing_start, end_session.
     Include JWT authentication in handleConnection."
 
 5. Fix code:
-   "@workspace /fix this service is throwing TypeORM QueryFailedError 
+   "@workspace /fix this service is throwing TypeORM QueryFailedError
     when importing CSV contacts"
 
 6. Explain:
-   "@workspace /explain how the WebSocket authentication flow works 
+   "@workspace /explain how the WebSocket authentication flow works
     in this gateway"
 ```
 
 #### GitHub Copilot Shortcuts
 
-| Shortcut | Hành động |
-|----------|-----------|
-| `Tab` | Chấp nhận gợi ý |
-| `Esc` | Từ chối gợi ý |
-| `Alt+]` | Gợi ý tiếp theo |
-| `Alt+[` | Gợi ý trước |
-| `Ctrl+Enter` | Mở danh sách gợi ý |
-| `Ctrl+Shift+I` | Mở Copilot Chat |
+| Shortcut       | Hành động          |
+| -------------- | ------------------ |
+| `Tab`          | Chấp nhận gợi ý    |
+| `Esc`          | Từ chối gợi ý      |
+| `Alt+]`        | Gợi ý tiếp theo    |
+| `Alt+[`        | Gợi ý trước        |
+| `Ctrl+Enter`   | Mở danh sách gợi ý |
+| `Ctrl+Shift+I` | Mở Copilot Chat    |
 
 #### Copilot Chat Commands
 
-| Command | Mục đích |
-|---------|---------|
-| `/explain` | Giải thích code |
-| `/fix` | Sửa lỗi tự động |
-| `/test` | Generate unit tests |
-| `/doc` | Generate JSDoc comments |
-| `@workspace` | Hỏi về toàn bộ project |
-| `@terminal` | Hỏi về terminal/commands |
+| Command      | Mục đích                 |
+| ------------ | ------------------------ |
+| `/explain`   | Giải thích code          |
+| `/fix`       | Sửa lỗi tự động          |
+| `/test`      | Generate unit tests      |
+| `/doc`       | Generate JSDoc comments  |
+| `@workspace` | Hỏi về toàn bộ project   |
+| `@terminal`  | Hỏi về terminal/commands |
 
 ---
 
@@ -992,4 +1033,4 @@ Phase 5 — WhatsApp + Polish (Tuần 8)
 
 ---
 
-*Generated for Thesis Project — Customer Support Chat Platform*
+_Generated for Thesis Project — Customer Support Chat Platform_

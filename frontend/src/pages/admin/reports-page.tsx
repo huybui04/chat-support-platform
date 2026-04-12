@@ -5,6 +5,7 @@ import {
   getCampaignReportDetail,
   getAgentsReport,
   getCampaignReports,
+  type ReportsExportFormat,
   type ReportsExportKind,
   type ReportsWindow,
   type AgentReport,
@@ -41,6 +42,8 @@ export function AdminReportsPage() {
   const [detailError, setDetailError] = useState("");
   const [exportBusy, setExportBusy] = useState<ReportsExportKind | "">("");
   const [exportError, setExportError] = useState("");
+  const [exportFormat, setExportFormat] = useState<ReportsExportFormat>("csv");
+  const exportFormatLabel = exportFormat.toUpperCase();
 
   useEffect(() => {
     let mounted = true;
@@ -177,6 +180,7 @@ export function AdminReportsPage() {
             ? (selectedCampaignId ?? undefined)
             : undefined,
         all: true,
+        format: exportFormat,
       });
     } catch (caughtError) {
       setExportError(
@@ -212,6 +216,18 @@ export function AdminReportsPage() {
             <option value="all">All time</option>
           </select>
         </label>
+        <label>
+          Export format
+          <select
+            value={exportFormat}
+            onChange={(event) =>
+              setExportFormat(event.target.value as ReportsExportFormat)
+            }
+          >
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </label>
       </div>
       <div className="page-actions">
         <button
@@ -219,7 +235,7 @@ export function AdminReportsPage() {
           onClick={() => void exportCsv("campaigns")}
           disabled={exportBusy !== ""}
         >
-          Export Campaign CSV
+          Export Campaign {exportFormatLabel}
         </button>
         <button
           type="button"
@@ -227,7 +243,7 @@ export function AdminReportsPage() {
           onClick={() => void exportCsv("agents")}
           disabled={exportBusy !== ""}
         >
-          Export Agent CSV
+          Export Agent {exportFormatLabel}
         </button>
         <button
           type="button"
@@ -235,7 +251,7 @@ export function AdminReportsPage() {
           onClick={() => void exportCsv("sessions")}
           disabled={exportBusy !== ""}
         >
-          Export Sessions CSV
+          Export Sessions {exportFormatLabel}
         </button>
         <button
           type="button"
@@ -243,7 +259,7 @@ export function AdminReportsPage() {
           onClick={() => void exportCsv("campaign-detail")}
           disabled={!selectedCampaignId || exportBusy !== ""}
         >
-          Export Detail CSV
+          Export Detail {exportFormatLabel}
         </button>
       </div>
       {exportError ? <p className="error-note">{exportError}</p> : null}

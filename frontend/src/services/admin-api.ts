@@ -16,6 +16,7 @@ export type ReportsExportKind =
   | "agents"
   | "sessions"
   | "campaign-detail";
+export type ReportsExportFormat = "csv" | "json";
 
 type ReportsQuery = PaginationQuery & {
   window?: ReportsWindow;
@@ -25,6 +26,7 @@ type ExportReportsQuery = ReportsQuery & {
   kind: ReportsExportKind;
   campaignId?: string;
   all?: boolean;
+  format?: ReportsExportFormat;
 };
 
 export type Campaign = {
@@ -237,8 +239,7 @@ export async function downloadReportsCsv(query: ExportReportsQuery) {
   );
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `${response.status} ${response.statusText}`);
+    throw new Error(await readExportError(response));
   }
 
   const blob = await response.blob();
@@ -255,6 +256,29 @@ export async function downloadReportsCsv(query: ExportReportsQuery) {
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
+}
+
+async function readExportError(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = (await response.json()) as {
+        message?: string | string[];
+      };
+      if (Array.isArray(payload.message)) {
+        return payload.message.join("; ");
+      }
+      if (typeof payload.message === "string" && payload.message) {
+        return payload.message;
+      }
+    } catch {
+      // Fallback to plain text below.
+    }
+  }
+
+  const text = await response.text();
+  return text || `${response.status} ${response.statusText}`;
 }
 
 function toQueryString(
