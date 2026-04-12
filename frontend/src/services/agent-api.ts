@@ -1,0 +1,83 @@
+import { apiRequest } from "./http-client";
+import type { ApiResponse, PaginatedResult } from "../types/api";
+
+export type ChatSession = {
+  id: string;
+  campaignId: string;
+  contactId: string;
+  agentId: string | null;
+  channel: "web" | "whatsapp";
+  status: "pending" | "active" | "completed" | "abandoned";
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  sessionId: string;
+  senderType: "agent" | "customer" | "system";
+  senderId: string | null;
+  content: string;
+  messageType: "text" | "image" | "file" | "system";
+  createdAt: string;
+};
+
+type GetSessionsInput = {
+  status: ChatSession["status"];
+  agentId?: string;
+};
+
+export async function getSessions(
+  input: GetSessionsInput,
+): Promise<PaginatedResult<ChatSession>> {
+  const searchParams = new URLSearchParams({
+    status: input.status,
+    page: "1",
+    limit: "30",
+  });
+
+  if (input.agentId) {
+    searchParams.set("agentId", input.agentId);
+  }
+
+  const response = await apiRequest<ApiResponse<ChatSession[]>>(
+    `/sessions?${searchParams.toString()}`,
+  );
+
+  return { items: response.data, meta: response.meta };
+}
+
+export async function acceptSession(sessionId: string): Promise<ChatSession> {
+  const response = await apiRequest<ApiResponse<ChatSession>>(
+    `/sessions/${sessionId}/accept`,
+    {
+      method: "POST",
+      body: {},
+    },
+  );
+
+  return response.data;
+}
+
+export async function endSession(sessionId: string): Promise<ChatSession> {
+  const response = await apiRequest<ApiResponse<ChatSession>>(
+    `/sessions/${sessionId}/end`,
+    {
+      method: "POST",
+      body: {},
+    },
+  );
+
+  return response.data;
+}
+
+export async function getSessionMessages(
+  sessionId: string,
+): Promise<ChatMessage[]> {
+  const response = await apiRequest<ApiResponse<ChatMessage[]>>(
+    `/sessions/${sessionId}/messages`,
+  );
+
+  return response.data;
+}
