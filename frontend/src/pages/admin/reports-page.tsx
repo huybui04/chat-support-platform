@@ -12,14 +12,20 @@ import {
   type CampaignDetailReport,
   type CampaignReport,
 } from "../../services/admin-api";
+import { PaginationControls } from "../../components/common/pagination-controls";
 import { StatusLegend } from "../../components/common/status-legend";
 import { useAuth } from "../../store/auth-context";
 import { useAdminPresence } from "../../store/use-admin-presence";
+import type { ApiMeta } from "../../types/api";
 
 type ReportsState = {
   campaigns: CampaignReport[];
+  campaignsMeta?: ApiMeta;
   agents: AgentReport[];
+  agentsMeta?: ApiMeta;
 };
+
+const REPORTS_PAGE_SIZE = 20;
 
 export function AdminReportsPage() {
   const { token } = useAuth();
@@ -29,6 +35,8 @@ export function AdminReportsPage() {
     campaigns: [],
     agents: [],
   });
+  const [campaignsPage, setCampaignsPage] = useState(1);
+  const [agentsPage, setAgentsPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -53,8 +61,16 @@ export function AdminReportsPage() {
       setError("");
       try {
         const [campaignsResult, agentsResult] = await Promise.all([
-          getCampaignReports({ page: 1, limit: 20, window: windowFilter }),
-          getAgentsReport({ page: 1, limit: 20, window: windowFilter }),
+          getCampaignReports({
+            page: campaignsPage,
+            limit: REPORTS_PAGE_SIZE,
+            window: windowFilter,
+          }),
+          getAgentsReport({
+            page: agentsPage,
+            limit: REPORTS_PAGE_SIZE,
+            window: windowFilter,
+          }),
         ]);
 
         if (!mounted) {
@@ -63,7 +79,9 @@ export function AdminReportsPage() {
 
         setState({
           campaigns: campaignsResult.items,
+          campaignsMeta: campaignsResult.meta,
           agents: agentsResult.items,
+          agentsMeta: agentsResult.meta,
         });
         setLastSyncedAt(new Date().toISOString());
       } catch (caughtError) {
@@ -86,7 +104,7 @@ export function AdminReportsPage() {
     return () => {
       mounted = false;
     };
-  }, [windowFilter]);
+  }, [agentsPage, campaignsPage, windowFilter]);
 
   useEffect(() => {
     if (!token || queueEventTick === 0) {
@@ -97,8 +115,16 @@ export function AdminReportsPage() {
 
     const timer = window.setTimeout(() => {
       void Promise.all([
-        getCampaignReports({ page: 1, limit: 20, window: windowFilter }),
-        getAgentsReport({ page: 1, limit: 20, window: windowFilter }),
+        getCampaignReports({
+          page: campaignsPage,
+          limit: REPORTS_PAGE_SIZE,
+          window: windowFilter,
+        }),
+        getAgentsReport({
+          page: agentsPage,
+          limit: REPORTS_PAGE_SIZE,
+          window: windowFilter,
+        }),
       ])
         .then(([campaignsResult, agentsResult]) => {
           if (cancelled) {
@@ -107,7 +133,9 @@ export function AdminReportsPage() {
 
           setState({
             campaigns: campaignsResult.items,
+            campaignsMeta: campaignsResult.meta,
             agents: agentsResult.items,
+            agentsMeta: agentsResult.meta,
           });
           setLastSyncedAt(new Date().toISOString());
         })
@@ -120,7 +148,7 @@ export function AdminReportsPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [queueEventTick, token, windowFilter]);
+  }, [agentsPage, campaignsPage, queueEventTick, token, windowFilter]);
 
   useEffect(() => {
     if (!selectedCampaignId) {
@@ -206,9 +234,11 @@ export function AdminReportsPage() {
           Time window
           <select
             value={windowFilter}
-            onChange={(event) =>
-              setWindowFilter(event.target.value as ReportsWindow)
-            }
+            onChange={(event) => {
+              setCampaignsPage(1);
+              setAgentsPage(1);
+              setWindowFilter(event.target.value as ReportsWindow);
+            }}
           >
             <option value="24h">Last 24 hours</option>
             <option value="7d">Last 7 days</option>
@@ -321,6 +351,14 @@ export function AdminReportsPage() {
           </tbody>
         </table>
       </div>
+      <PaginationControls
+        page={campaignsPage}
+        limit={REPORTS_PAGE_SIZE}
+        total={state.campaignsMeta?.total}
+        currentCount={state.campaigns.length}
+        loading={loading}
+        onPageChange={setCampaignsPage}
+      />
 
       <div className="data-panel">
         <h2>Campaign Detail</h2>
@@ -388,6 +426,14 @@ export function AdminReportsPage() {
           </tbody>
         </table>
       </div>
+      <PaginationControls
+        page={agentsPage}
+        limit={REPORTS_PAGE_SIZE}
+        total={state.agentsMeta?.total}
+        currentCount={state.agents.length}
+        loading={loading}
+        onPageChange={setAgentsPage}
+      />
     </section>
   );
 }

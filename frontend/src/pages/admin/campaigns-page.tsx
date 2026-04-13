@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 
+import { PaginationControls } from "../../components/common/pagination-controls";
 import { getCampaigns, type Campaign } from "../../services/admin-api";
 import type { ApiMeta } from "../../types/api";
+
+const PAGE_SIZE = 20;
 
 export function AdminCampaignsPage() {
   const [items, setItems] = useState<Campaign[]>([]);
   const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -16,7 +20,7 @@ export function AdminCampaignsPage() {
       setLoading(true);
       setError("");
       try {
-        const result = await getCampaigns({ page: 1, limit: 20 });
+        const result = await getCampaigns({ page, limit: PAGE_SIZE });
         if (!mounted) {
           return;
         }
@@ -42,7 +46,7 @@ export function AdminCampaignsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [page]);
 
   return (
     <section className="placeholder-page">
@@ -79,6 +83,15 @@ export function AdminCampaignsPage() {
           </tbody>
         </table>
       </div>
+
+      <PaginationControls
+        page={page}
+        limit={PAGE_SIZE}
+        total={meta?.total}
+        currentCount={items.length}
+        loading={loading}
+        onPageChange={setPage}
+      />
     </section>
   );
 }

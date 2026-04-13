@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { PaginationControls } from "../../components/common/pagination-controls";
 import { StatusLegend } from "../../components/common/status-legend";
 import { useAuth } from "../../store/auth-context";
 import { useAdminPresence } from "../../store/use-admin-presence";
 import { getAgents, type User } from "../../services/admin-api";
 import type { ApiMeta } from "../../types/api";
 
+const PAGE_SIZE = 20;
+
 export function AdminAgentsPage() {
   const { token } = useAuth();
   const { socketState, agentStatuses } = useAdminPresence(token);
   const [items, setItems] = useState<User[]>([]);
   const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "online" | "offline">("all");
@@ -45,7 +49,7 @@ export function AdminAgentsPage() {
       setLoading(true);
       setError("");
       try {
-        const result = await getAgents({ page: 1, limit: 20 });
+        const result = await getAgents({ page, limit: PAGE_SIZE });
         if (!mounted) {
           return;
         }
@@ -71,7 +75,7 @@ export function AdminAgentsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [page]);
 
   return (
     <section className="placeholder-page">
@@ -154,6 +158,15 @@ export function AdminAgentsPage() {
           </tbody>
         </table>
       </div>
+
+      <PaginationControls
+        page={page}
+        limit={PAGE_SIZE}
+        total={meta?.total}
+        currentCount={items.length}
+        loading={loading}
+        onPageChange={setPage}
+      />
     </section>
   );
 }

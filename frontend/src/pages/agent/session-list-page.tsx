@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { PaginationControls } from "../../components/common/pagination-controls";
 import {
   acceptSession,
   endSession,
@@ -8,47 +9,110 @@ import {
   type ChatSession,
 } from "../../services/agent-api";
 import { getCurrentUser } from "../../services/admin-api";
+import type { ApiMeta } from "../../types/api";
+
+const PAGE_SIZE = 20;
 
 export function AgentSessionListPage() {
   const navigate = useNavigate();
   const [pendingItems, setPendingItems] = useState<ChatSession[]>([]);
+  const [pendingMeta, setPendingMeta] = useState<ApiMeta | undefined>();
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingLoading, setPendingLoading] = useState(true);
   const [activeItems, setActiveItems] = useState<ChatSession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeMeta, setActiveMeta] = useState<ApiMeta | undefined>();
+  const [activePage, setActivePage] = useState(1);
+  const [activeLoading, setActiveLoading] = useState(true);
   const [error, setError] = useState("");
   const [busySessionId, setBusySessionId] = useState("");
   const [currentAgentId, setCurrentAgentId] = useState("");
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const resolveAgentId = useCallback(async () => {
+    if (currentAgentId) {
+      return currentAgentId;
+    }
+
+    const currentUser = await getCurrentUser();
+    setCurrentAgentId(currentUser.id);
+    return currentUser.id;
+  }, [currentAgentId]);
+
+  const refreshPending = useCallback(async () => {
+    setPendingLoading(true);
     try {
-      let resolvedAgentId = currentAgentId;
-      if (!resolvedAgentId) {
-        const currentUser = await getCurrentUser();
-        resolvedAgentId = currentUser.id;
-        setCurrentAgentId(currentUser.id);
+      const pendingResult = await getSessions({
+        status: "pending",
+        page: pendingPage,
+        limit: PAGE_SIZE,
+      });
+
+      if (
+        pendingPage > 1 &&
+        pendingResult.items.length === 0 &&
+        (pendingResult.meta?.total ?? 0) > 0
+      ) {
+        setPendingPage((current) => Math.max(1, current - 1));
+        return;
       }
 
-      const [pendingResult, activeResult] = await Promise.all([
-        getSessions({ status: "pending" }),
-        getSessions({ status: "active", agentId: resolvedAgentId }),
-      ]);
       setPendingItems(pendingResult.items);
-      setActiveItems(activeResult.items);
+      setPendingMeta(pendingResult.meta);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Failed to load sessions",
+          : "Failed to load pending sessions",
       );
     } finally {
-      setLoading(false);
+      setPendingLoading(false);
     }
-  }, [currentAgentId]);
+  }, [pendingPage]);
+
+  const refreshActive = useCallback(async () => {
+    setActiveLoading(true);
+    try {
+      const resolvedAgentId = await resolveAgentId();
+      const activeResult = await getSessions({
+        status: "active",
+        agentId: resolvedAgentId,
+        page: activePage,
+        limit: PAGE_SIZE,
+      });
+
+      if (
+        activePage > 1 &&
+        activeResult.items.length === 0 &&
+        (activeResult.meta?.total ?? 0) > 0
+      ) {
+        setActivePage((current) => Math.max(1, current - 1));
+        return;
+      }
+
+      setActiveItems(activeResult.items);
+      setActiveMeta(activeResult.meta);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to load active sessions",
+      );
+    } finally {
+      setActiveLoading(false);
+    }
+  }, [activePage, resolveAgentId]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refreshPending();
+  }, [refreshPending]);
+
+  useEffect(() => {
+    void refreshActive();
+  }, [refreshActive]);
+
+  const refresh = useCallback(async () => {
+    setError("");
+    await Promise.all([refreshPending(), refreshActive()]);
+  }, [refreshActive, refreshPending]);
 
   const onAccept = async (sessionId: string) => {
     setBusySessionId(sessionId);
@@ -93,12 +157,17 @@ export function AgentSessionListPage() {
         </button>
       </div>
 
-      {loading ? <p className="status-note">Loading sessions...</p> : null}
+      {pendingLoading || activeLoading ? (
+        <p className="status-note">Refreshing sessions...</p>
+      ) : null}
       {error ? <p className="error-note">{error}</p> : null}
 
       <div className="admin-panel-grid">
         <div className="data-panel">
           <h2>Pending</h2>
+          {pendingLoading ? (
+            <p className="status-note">Loading pending sessions...</p>
+          ) : null}
           <table className="data-table">
             <thead>
               <tr>
@@ -110,6 +179,13 @@ export function AgentSessionListPage() {
               </tr>
             </thead>
             <tbody>
+              {!pendingLoading && pendingItems.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <p className="status-note">No pending sessions.</p>
+                  </td>
+                </tr>
+              ) : null}
               {pendingItems.map((session) => (
                 <tr key={session.id}>
                   <td>{session.id}</td>
@@ -140,10 +216,21 @@ export function AgentSessionListPage() {
               ))}
             </tbody>
           </table>
+          <PaginationControls
+            page={pendingPage}
+            limit={PAGE_SIZE}
+            total={pendingMeta?.total}
+            currentCount={pendingItems.length}
+            loading={pendingLoading}
+            onPageChange={setPendingPage}
+          />
         </div>
 
         <div className="data-panel">
           <h2>Active</h2>
+          {activeLoading ? (
+            <p className="status-note">Loading active sessions...</p>
+          ) : null}
           <table className="data-table">
             <thead>
               <tr>
@@ -155,6 +242,13 @@ export function AgentSessionListPage() {
               </tr>
             </thead>
             <tbody>
+              {!activeLoading && activeItems.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <p className="status-note">No active sessions.</p>
+                  </td>
+                </tr>
+              ) : null}
               {activeItems.map((session) => (
                 <tr key={session.id}>
                   <td>{session.id}</td>
@@ -190,6 +284,14 @@ export function AgentSessionListPage() {
               ))}
             </tbody>
           </table>
+          <PaginationControls
+            page={activePage}
+            limit={PAGE_SIZE}
+            total={activeMeta?.total}
+            currentCount={activeItems.length}
+            loading={activeLoading}
+            onPageChange={setActivePage}
+          />
         </div>
       </div>
     </section>

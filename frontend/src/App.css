@@ -434,6 +434,15 @@ button.inline-action {
   gap: 8px;
 }
 
+.pagination-controls {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pagination-controls .status-note {
+  margin-top: 0;
+}
+
 .page-actions label {
   display: grid;
   gap: 6px;

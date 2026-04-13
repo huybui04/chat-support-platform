@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 
+import { PaginationControls } from "../../components/common/pagination-controls";
 import { getContacts, type Contact } from "../../services/admin-api";
 import type { ApiMeta } from "../../types/api";
+
+const PAGE_SIZE = 20;
 
 export function AdminContactsPage() {
   const [items, setItems] = useState<Contact[]>([]);
   const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -16,7 +20,7 @@ export function AdminContactsPage() {
       setLoading(true);
       setError("");
       try {
-        const result = await getContacts({ page: 1, limit: 20 });
+        const result = await getContacts({ page, limit: PAGE_SIZE });
         if (!mounted) {
           return;
         }
@@ -42,7 +46,7 @@ export function AdminContactsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [page]);
 
   return (
     <section className="placeholder-page">
@@ -77,6 +81,15 @@ export function AdminContactsPage() {
           </tbody>
         </table>
       </div>
+
+      <PaginationControls
+        page={page}
+        limit={PAGE_SIZE}
+        total={meta?.total}
+        currentCount={items.length}
+        loading={loading}
+        onPageChange={setPage}
+      />
     </section>
   );
 }

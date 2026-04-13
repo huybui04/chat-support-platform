@@ -26,15 +26,20 @@ export type ChatMessage = {
 type GetSessionsInput = {
   status: ChatSession["status"];
   agentId?: string;
+  page?: number;
+  limit?: number;
 };
 
 export async function getSessions(
   input: GetSessionsInput,
 ): Promise<PaginatedResult<ChatSession>> {
+  const page = input.page ?? 1;
+  const limit = input.limit ?? 30;
+
   const searchParams = new URLSearchParams({
     status: input.status,
-    page: "1",
-    limit: "30",
+    page: String(page),
+    limit: String(limit),
   });
 
   if (input.agentId) {
