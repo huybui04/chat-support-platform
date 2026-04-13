@@ -68,4 +68,9 @@ export class ContactsService {
 
     return this.contactsRepository.save(merged);
   }
+
+  async remove(id: string): Promise<void> {
+    const contact = await this.findById(id);
+    await this.contactsRepository.remove(contact);
+  }
 }

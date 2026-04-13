@@ -32,6 +32,7 @@ type ExportReportsQuery = ReportsQuery & {
 export type Campaign = {
   id: string;
   name: string;
+  description: string | null;
   status: "draft" | "active" | "paused" | "completed";
   channel: "web" | "whatsapp";
   startDate: string | null;
@@ -64,6 +65,60 @@ export type Contact = {
   whatsappId: string | null;
   createdAt: string;
 };
+
+export type CreateCampaignPayload = {
+  name: string;
+  description?: string;
+  status?: Campaign["status"];
+  channel?: Campaign["channel"];
+  startDate?: string;
+  endDate?: string;
+  createdById: string;
+};
+
+export type UpdateCampaignPayload = Omit<
+  CreateCampaignPayload,
+  "createdById"
+> & {
+  createdById?: string;
+};
+
+export type CreateAgentPayload = {
+  keycloakId: string;
+  fullName: string;
+  email: string;
+  role?: User["role"];
+  isActive?: boolean;
+  isOnline?: boolean;
+};
+
+export type UpdateAgentPayload = {
+  fullName?: string;
+  email?: string;
+  role?: User["role"];
+  isActive?: boolean;
+};
+
+export type CreateTeamPayload = {
+  name: string;
+  description?: string;
+  createdById: string;
+};
+
+export type UpdateTeamPayload = {
+  name?: string;
+  description?: string;
+};
+
+export type CreateContactPayload = {
+  fullName: string;
+  phone?: string;
+  email?: string;
+  whatsappId?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type UpdateContactPayload = Partial<CreateContactPayload>;
 
 export type CampaignReport = {
   campaignId: string;
@@ -121,6 +176,31 @@ export async function getCampaigns(
   return { items: response.data, meta: response.meta };
 }
 
+export async function createCampaign(payload: CreateCampaignPayload) {
+  const response = await apiRequest<ApiResponse<Campaign>>("/campaigns", {
+    method: "POST",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function updateCampaign(
+  id: string,
+  payload: UpdateCampaignPayload,
+) {
+  const response = await apiRequest<ApiResponse<Campaign>>(`/campaigns/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function deleteCampaign(id: string) {
+  await apiRequest<ApiResponse<{ id: string }>>(`/campaigns/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getAgents(
   query: PaginationQuery = {},
 ): Promise<PaginatedResult<User>> {
@@ -128,6 +208,32 @@ export async function getAgents(
     `/users${toQueryString({ ...query, role: "agent" })}`,
   );
   return { items: response.data, meta: response.meta };
+}
+
+export async function createAgent(payload: CreateAgentPayload) {
+  const response = await apiRequest<ApiResponse<User>>("/users", {
+    method: "POST",
+    body: {
+      ...payload,
+      role: payload.role ?? "agent",
+    },
+  });
+  return response.data;
+}
+
+export async function updateAgent(id: string, payload: UpdateAgentPayload) {
+  const response = await apiRequest<ApiResponse<User>>(`/users/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function deleteAgent(id: string) {
+  const response = await apiRequest<ApiResponse<User>>(`/users/${id}`, {
+    method: "DELETE",
+  });
+  return response.data;
 }
 
 export async function getCurrentUser(): Promise<User> {
@@ -179,6 +285,28 @@ export async function getTeams(
   return { items: response.data, meta: response.meta };
 }
 
+export async function createTeam(payload: CreateTeamPayload) {
+  const response = await apiRequest<ApiResponse<Team>>("/teams", {
+    method: "POST",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function updateTeam(id: string, payload: UpdateTeamPayload) {
+  const response = await apiRequest<ApiResponse<Team>>(`/teams/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function deleteTeam(id: string) {
+  await apiRequest<ApiResponse<{ id: string }>>(`/teams/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getContacts(
   query: PaginationQuery = {},
 ): Promise<PaginatedResult<Contact>> {
@@ -186,6 +314,28 @@ export async function getContacts(
     `/contacts${toQueryString(query)}`,
   );
   return { items: response.data, meta: response.meta };
+}
+
+export async function createContact(payload: CreateContactPayload) {
+  const response = await apiRequest<ApiResponse<Contact>>("/contacts", {
+    method: "POST",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function updateContact(id: string, payload: UpdateContactPayload) {
+  const response = await apiRequest<ApiResponse<Contact>>(`/contacts/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return response.data;
+}
+
+export async function deleteContact(id: string) {
+  await apiRequest<ApiResponse<{ id: string }>>(`/contacts/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getCampaignReports(

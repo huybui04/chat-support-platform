@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -43,5 +44,11 @@ export class ContactsController {
   async update(@Param('id') id: string, @Body() payload: UpdateContactDto) {
     const contact = await this.contactsService.update(id, payload);
     return apiSuccess(contact);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    await this.contactsService.remove(id);
+    return apiSuccess({ id });
   }
 }

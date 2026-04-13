@@ -78,5 +78,42 @@ async function sendRequest(
 async function toRequestError(response: Response): Promise<Error> {
   const fallback = `${response.status} ${response.statusText}`;
   const text = await response.text();
-  return new Error(text || fallback);
+
+  if (!text) {
+    return new Error(fallback);
+  }
+
+  const normalized = normalizeErrorMessage(text);
+  return new Error(normalized || fallback);
+}
+
+function normalizeErrorMessage(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const payload = JSON.parse(trimmed) as {
+      message?: string | string[];
+      error?: string;
+      statusCode?: number;
+    };
+
+    if (Array.isArray(payload.message) && payload.message.length > 0) {
+      return payload.message.join("; ");
+    }
+
+    if (typeof payload.message === "string" && payload.message.trim()) {
+      return payload.message.trim();
+    }
+
+    if (typeof payload.error === "string" && payload.error.trim()) {
+      return payload.error.trim();
+    }
+  } catch {
+    // Non-JSON response, use raw text below.
+  }
+
+  return trimmed;
 }
