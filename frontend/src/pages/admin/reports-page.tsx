@@ -224,7 +224,6 @@ export function AdminReportsPage() {
   return (
     <section className="placeholder-page">
       <h1>Reports</h1>
-      <p>Campaign and agent analytics from reporting endpoints.</p>
       <p className="status-note with-badges">
         Realtime presence:
         <span className={`status-badge ${socketState}`}>{socketState}</span>

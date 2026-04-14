@@ -167,6 +167,55 @@ export type SessionsReport = {
   avgSessionDurationSeconds: number;
 };
 
+export type CampaignContactsImportResult = {
+  log: {
+    id: string;
+    fileName: string;
+    totalRows: number;
+    successRows: number;
+    failedRows: number;
+    status: "processing" | "completed" | "failed";
+    errorLog: unknown;
+    createdAt: string;
+  };
+  summary: {
+    totalRows: number;
+    successRows: number;
+    failedRows: number;
+  };
+};
+
+export type ImportCsvMapping = {
+  full_name: string;
+  phone: string;
+  email: string;
+};
+
+export type CampaignImportLog = {
+  id: string;
+  campaignId: string;
+  fileName: string;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  status: "processing" | "completed" | "failed";
+  errorLog: unknown;
+  createdAt: string;
+};
+
+export type CampaignAgentAssignment = {
+  id: string;
+  campaignId: string;
+  agentId: string;
+  assignedAt: string;
+};
+
+export type CampaignTeamAssignment = {
+  id: string;
+  campaignId: string;
+  teamId: string;
+};
+
 export async function getCampaigns(
   query: PaginationQuery = {},
 ): Promise<PaginatedResult<Campaign>> {
@@ -199,6 +248,70 @@ export async function deleteCampaign(id: string) {
   await apiRequest<ApiResponse<{ id: string }>>(`/campaigns/${id}`, {
     method: "DELETE",
   });
+}
+
+export async function importCampaignContactsCsv(
+  campaignId: string,
+  file: File,
+  mapping?: Partial<ImportCsvMapping>,
+): Promise<CampaignContactsImportResult> {
+  const token = readAuthState().token;
+  const formData = new FormData();
+  formData.append("file", file);
+  if (mapping) {
+    formData.append("mapping", JSON.stringify(mapping));
+  }
+
+  const response = await fetch(
+    `${apiBaseUrl}/campaigns/${campaignId}/contacts/import`,
+    {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readExportError(response));
+  }
+
+  const payload =
+    (await response.json()) as ApiResponse<CampaignContactsImportResult>;
+  return payload.data;
+}
+
+export async function getCampaignImportLogs(
+  campaignId: string,
+  query: PaginationQuery = {},
+): Promise<PaginatedResult<CampaignImportLog>> {
+  const response = await apiRequest<ApiResponse<CampaignImportLog[]>>(
+    `/campaigns/${campaignId}/contacts/import-logs${toQueryString(query)}`,
+  );
+  return { items: response.data, meta: response.meta };
+}
+
+export async function assignCampaignAgent(campaignId: string, agentId: string) {
+  const response = await apiRequest<ApiResponse<CampaignAgentAssignment>>(
+    `/campaigns/${campaignId}/agents`,
+    {
+      method: "POST",
+      body: { agentId },
+    },
+  );
+  return response.data;
+}
+
+export async function assignCampaignTeam(campaignId: string, teamId: string) {
+  const response = await apiRequest<ApiResponse<CampaignTeamAssignment>>(
+    `/campaigns/${campaignId}/teams`,
+    {
+      method: "POST",
+      body: { teamId },
+    },
+  );
+  return response.data;
 }
 
 export async function getAgents(

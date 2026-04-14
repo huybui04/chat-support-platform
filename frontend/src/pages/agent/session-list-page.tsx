@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { PaginationControls } from "../../components/common/pagination-controls";
+import { createChatSocket } from "../../socket/chat-socket";
+import { useAuth } from "../../store/auth-context";
+import { useToast } from "../../store/toast-context";
 import {
   acceptSession,
   endSession,
@@ -12,8 +15,15 @@ import { getCurrentUser } from "../../services/admin-api";
 import type { ApiMeta } from "../../types/api";
 
 const PAGE_SIZE = 20;
+type RealtimeSocketState =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "error";
 
 export function AgentSessionListPage() {
+  const { token } = useAuth();
+  const { showSuccess } = useToast();
   const navigate = useNavigate();
   const [pendingItems, setPendingItems] = useState<ChatSession[]>([]);
   const [pendingMeta, setPendingMeta] = useState<ApiMeta | undefined>();
@@ -26,6 +36,11 @@ export function AgentSessionListPage() {
   const [error, setError] = useState("");
   const [busySessionId, setBusySessionId] = useState("");
   const [currentAgentId, setCurrentAgentId] = useState("");
+  const [socketState, setSocketState] =
+    useState<RealtimeSocketState>("disconnected");
+  const [queueEventTick, setQueueEventTick] = useState(0);
+  const [lastQueueEventAt, setLastQueueEventAt] = useState<string | null>(null);
+  const lastToastAtRef = useRef(0);
 
   const resolveAgentId = useCallback(async () => {
     if (currentAgentId) {
@@ -114,6 +129,87 @@ export function AgentSessionListPage() {
     await Promise.all([refreshPending(), refreshActive()]);
   }, [refreshActive, refreshPending]);
 
+  useEffect(() => {
+    if (!token) {
+      setSocketState("disconnected");
+      setQueueEventTick(0);
+      setLastQueueEventAt(null);
+      return;
+    }
+
+    const wsUrl = import.meta.env.VITE_WS_URL ?? "http://localhost:3001";
+    const socket = createChatSocket({ baseUrl: wsUrl, token });
+    setSocketState("connecting");
+
+    socket.on("connect", () => {
+      setSocketState("connected");
+    });
+
+    socket.on("disconnect", () => {
+      setSocketState("disconnected");
+    });
+
+    socket.on("error", () => {
+      setSocketState("error");
+    });
+
+    const maybeNotifyQueueEvent = (message: string) => {
+      const now = Date.now();
+      if (now - lastToastAtRef.current < 1500) {
+        return;
+      }
+      lastToastAtRef.current = now;
+      showSuccess(message);
+    };
+
+    const onQueueEvent = () => {
+      setQueueEventTick((current) => current + 1);
+      setLastQueueEventAt(new Date().toISOString());
+    };
+
+    socket.on("new_session_pending", () => {
+      onQueueEvent();
+      maybeNotifyQueueEvent("New pending session arrived");
+    });
+
+    socket.on("session_assigned", () => {
+      onQueueEvent();
+      maybeNotifyQueueEvent("A session was assigned");
+    });
+
+    socket.on("session_ended", () => {
+      onQueueEvent();
+      maybeNotifyQueueEvent("A session was ended");
+    });
+
+    return () => {
+      socket.disconnect();
+      setSocketState("disconnected");
+      setQueueEventTick(0);
+      setLastQueueEventAt(null);
+    };
+  }, [showSuccess, token]);
+
+  useEffect(() => {
+    if (!token || queueEventTick === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+
+      void refresh();
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [queueEventTick, refresh, token]);
+
   const onAccept = async (sessionId: string) => {
     setBusySessionId(sessionId);
     try {
@@ -156,6 +252,16 @@ export function AgentSessionListPage() {
           Refresh
         </button>
       </div>
+      <p className="status-note with-badges">
+        Queue realtime:
+        <span className={`status-badge ${socketState}`}>{socketState}</span>
+        <span>Last queue event:</span>
+        <span>
+          {lastQueueEventAt
+            ? new Date(lastQueueEventAt).toLocaleTimeString()
+            : "-"}
+        </span>
+      </p>
 
       {pendingLoading || activeLoading ? (
         <p className="status-note">Refreshing sessions...</p>

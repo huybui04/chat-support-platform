@@ -188,7 +188,6 @@ export function AdminAgentsPage() {
   return (
     <section className="placeholder-page">
       <h1>Agent Management</h1>
-      <p>Agent roster and online/active controls from users endpoint.</p>
 
       <p className="status-note">
         {meta?.total !== undefined ? `Total agents: ${meta.total}` : null}

@@ -5,10 +5,16 @@ import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
 import { RowActionButtons } from "../../components/common/row-action-buttons";
 import {
+  assignCampaignAgent,
+  assignCampaignTeam,
   createCampaign,
   deleteCampaign,
+  getAgents,
   getCampaigns,
   getCurrentUser,
+  getTeams,
+  type Team,
+  type User,
   updateCampaign,
   type Campaign,
 } from "../../services/admin-api";
@@ -49,6 +55,16 @@ export function AdminCampaignsPage() {
   const [campaignIdToDelete, setCampaignIdToDelete] = useState<string | null>(
     null,
   );
+  const [assignCampaignId, setAssignCampaignId] = useState("");
+  const [assignAgentId, setAssignAgentId] = useState("");
+  const [agents, setAgents] = useState<User[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [assigningAgent, setAssigningAgent] = useState(false);
+  const [assignTeamCampaignId, setAssignTeamCampaignId] = useState("");
+  const [assignTeamId, setAssignTeamId] = useState("");
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [assigningTeam, setAssigningTeam] = useState(false);
   const { creating, savingId, deleting, runCreate, runSave, runDelete } =
     useCrudActions();
 
@@ -73,6 +89,88 @@ export function AdminCampaignsPage() {
   useEffect(() => {
     void loadCampaigns();
   }, [loadCampaigns]);
+
+  useEffect(() => {
+    if (!assignCampaignId && items.length > 0) {
+      setAssignCampaignId(items[0].id);
+    }
+  }, [assignCampaignId, items]);
+
+  useEffect(() => {
+    if (!assignTeamCampaignId && items.length > 0) {
+      setAssignTeamCampaignId(items[0].id);
+    }
+  }, [assignTeamCampaignId, items]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAgents = async () => {
+      setAgentsLoading(true);
+      try {
+        const result = await getAgents({ page: 1, limit: 100 });
+        if (!cancelled) {
+          setAgents(result.items);
+          if (!assignAgentId && result.items.length > 0) {
+            setAssignAgentId(result.items[0].id);
+          }
+        }
+      } catch (caughtError) {
+        if (!cancelled) {
+          showError(
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Failed to load agents",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setAgentsLoading(false);
+        }
+      }
+    };
+
+    void loadAgents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assignAgentId, showError]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTeams = async () => {
+      setTeamsLoading(true);
+      try {
+        const result = await getTeams({ page: 1, limit: 100 });
+        if (!cancelled) {
+          setTeams(result.items);
+          if (!assignTeamId && result.items.length > 0) {
+            setAssignTeamId(result.items[0].id);
+          }
+        }
+      } catch (caughtError) {
+        if (!cancelled) {
+          showError(
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Failed to load teams",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setTeamsLoading(false);
+        }
+      }
+    };
+
+    void loadTeams();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assignTeamId, showError]);
 
   const handleCreate = async () => {
     if (!createForm.name.trim()) {
@@ -161,10 +259,61 @@ export function AdminCampaignsPage() {
     }
   };
 
+  const assignAgentToCampaign = async () => {
+    if (!assignCampaignId) {
+      showError("Please select a campaign");
+      return;
+    }
+
+    if (!assignAgentId) {
+      showError("Please select an agent");
+      return;
+    }
+
+    setAssigningAgent(true);
+    try {
+      await assignCampaignAgent(assignCampaignId, assignAgentId);
+      showSuccess("Agent assigned to campaign successfully");
+    } catch (caughtError) {
+      showError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to assign agent to campaign",
+      );
+    } finally {
+      setAssigningAgent(false);
+    }
+  };
+
+  const assignTeamToCampaign = async () => {
+    if (!assignTeamCampaignId) {
+      showError("Please select a campaign");
+      return;
+    }
+
+    if (!assignTeamId) {
+      showError("Please select a team");
+      return;
+    }
+
+    setAssigningTeam(true);
+    try {
+      await assignCampaignTeam(assignTeamCampaignId, assignTeamId);
+      showSuccess("Team assigned to campaign successfully");
+    } catch (caughtError) {
+      showError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to assign team to campaign",
+      );
+    } finally {
+      setAssigningTeam(false);
+    }
+  };
+
   return (
     <section className="placeholder-page">
       <h1>Campaign Management</h1>
-      <p>Create, update and remove campaigns from supervisor portal.</p>
 
       <p className="status-note">
         {meta?.total !== undefined ? `Total campaigns: ${meta.total}` : null}
@@ -249,6 +398,104 @@ export function AdminCampaignsPage() {
           }
         />
       </CrudFormCard>
+
+      <div className="crud-form">
+        <h2>Assign Agent To Campaign</h2>
+        <div className="crud-form-grid">
+          <select
+            value={assignCampaignId}
+            disabled={assigningAgent || items.length === 0}
+            onChange={(event) => setAssignCampaignId(event.target.value)}
+          >
+            {items.length === 0 ? (
+              <option value="">No campaign available on this page</option>
+            ) : null}
+            {items.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={assignAgentId}
+            disabled={assigningAgent || agentsLoading || agents.length === 0}
+            onChange={(event) => setAssignAgentId(event.target.value)}
+          >
+            {agents.length === 0 ? (
+              <option value="">No agent available</option>
+            ) : null}
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.fullName} ({agent.email})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="page-actions">
+          <button
+            type="button"
+            onClick={() => void assignAgentToCampaign()}
+            disabled={
+              assigningAgent ||
+              items.length === 0 ||
+              agents.length === 0 ||
+              agentsLoading
+            }
+          >
+            {assigningAgent ? "Assigning..." : "Assign Agent"}
+          </button>
+        </div>
+      </div>
+
+      <div className="crud-form">
+        <h2>Assign Team To Campaign</h2>
+        <div className="crud-form-grid">
+          <select
+            value={assignTeamCampaignId}
+            disabled={assigningTeam || items.length === 0}
+            onChange={(event) => setAssignTeamCampaignId(event.target.value)}
+          >
+            {items.length === 0 ? (
+              <option value="">No campaign available on this page</option>
+            ) : null}
+            {items.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={assignTeamId}
+            disabled={assigningTeam || teamsLoading || teams.length === 0}
+            onChange={(event) => setAssignTeamId(event.target.value)}
+          >
+            {teams.length === 0 ? (
+              <option value="">No team available</option>
+            ) : null}
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="page-actions">
+          <button
+            type="button"
+            onClick={() => void assignTeamToCampaign()}
+            disabled={
+              assigningTeam ||
+              items.length === 0 ||
+              teams.length === 0 ||
+              teamsLoading
+            }
+          >
+            {assigningTeam ? "Assigning..." : "Assign Team"}
+          </button>
+        </div>
+      </div>
 
       <div className="data-panel">
         <table className="data-table">

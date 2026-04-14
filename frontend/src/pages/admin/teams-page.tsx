@@ -142,7 +142,6 @@ export function AdminTeamsPage() {
   return (
     <section className="placeholder-page">
       <h1>Team Management</h1>
-      <p>Create, update and delete teams from supervisor portal.</p>
 
       <p className="status-note">
         {meta?.total !== undefined ? `Total teams: ${meta.total}` : null}

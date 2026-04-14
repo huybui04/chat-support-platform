@@ -9,11 +9,13 @@ import {
 } from "../../services/agent-api";
 import { createChatSocket } from "../../socket/chat-socket";
 import { useAuth } from "../../store/auth-context";
+import { useToast } from "../../store/toast-context";
 import type { SocketIncomingMessage } from "../../types/socket";
 
 export function AgentChatWindowPage() {
   const params = useParams();
   const { token } = useAuth();
+  const { showError, showSuccess } = useToast();
 
   const [wsUrl, setWsUrl] = useState(
     import.meta.env.VITE_WS_URL ?? "http://localhost:3001",
@@ -24,6 +26,9 @@ export function AgentChatWindowPage() {
   const [connection, setConnection] = useState("disconnected");
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [error, setError] = useState("");
+  const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<string | null>(
+    null,
+  );
 
   const socketRef = useRef<Socket | null>(null);
   const typingTimeoutRef = useRef<number | null>(null);
@@ -74,6 +79,7 @@ export function AgentChatWindowPage() {
         return;
       }
       setMessages((current) => [...current, payload.message]);
+      setLastRealtimeSyncAt(new Date().toISOString());
     });
 
     socket.on(
@@ -90,6 +96,36 @@ export function AgentChatWindowPage() {
           return;
         }
         setIsOtherTyping(payload.isTyping);
+        setLastRealtimeSyncAt(new Date().toISOString());
+      },
+    );
+
+    socket.on("session_ended", (payload: { sessionId?: string }) => {
+      if (
+        !payload.sessionId ||
+        payload.sessionId !== activeSessionRef.current
+      ) {
+        return;
+      }
+
+      setIsOtherTyping(false);
+      setLastRealtimeSyncAt(new Date().toISOString());
+      setError("Session was ended");
+      showSuccess("Session ended in realtime");
+    });
+
+    socket.on(
+      "session_assigned",
+      (payload: { session?: { id?: string; agentId?: string | null } }) => {
+        if (
+          !payload.session?.id ||
+          payload.session.id !== activeSessionRef.current
+        ) {
+          return;
+        }
+
+        setLastRealtimeSyncAt(new Date().toISOString());
+        showSuccess("Session assignment updated in realtime");
       },
     );
   };
@@ -185,13 +221,15 @@ export function AgentChatWindowPage() {
 
     try {
       await endSession(selectedSessionId);
-      setError("Session ended");
+      setError("");
+      showSuccess("Session ended");
     } catch (caughtError) {
-      setError(
+      const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Failed to end session",
-      );
+          : "Failed to end session";
+      setError(message);
+      showError(message);
     }
   };
 
@@ -240,6 +278,12 @@ export function AgentChatWindowPage() {
       <p className="status-note with-badges">
         Socket:
         <span className={`status-badge ${connection}`}>{connection}</span>
+        <span>Last realtime sync:</span>
+        <span>
+          {lastRealtimeSyncAt
+            ? new Date(lastRealtimeSyncAt).toLocaleTimeString()
+            : "-"}
+        </span>
       </p>
       {isOtherTyping ? (
         <p className="status-note with-badges">
