@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "../../components/common/confirm-dialog";
-import { CrudFormCard } from "../../components/common/crud-form-card";
+// import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
 import { RowActionButtons } from "../../components/common/row-action-buttons";
 import { StatusLegend } from "../../components/common/status-legend";
@@ -10,7 +10,7 @@ import { useToast } from "../../store/toast-context";
 import { useCrudActions } from "../../store/use-crud-actions";
 import { useAdminPresence } from "../../store/use-admin-presence";
 import {
-  createAgent,
+  // createAgent,
   deleteAgent,
   getAgents,
   updateAgent,
@@ -27,12 +27,12 @@ type AgentForm = {
   isActive: boolean;
 };
 
-const initialCreateForm: AgentForm = {
-  keycloakId: "",
-  fullName: "",
-  email: "",
-  isActive: true,
-};
+// const initialCreateForm: AgentForm = {
+//   keycloakId: "",
+//   fullName: "",
+//   email: "",
+//   isActive: true,
+// };
 
 const initialEditForm: Omit<AgentForm, "keycloakId"> = {
   fullName: "",
@@ -50,12 +50,13 @@ export function AdminAgentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "online" | "offline">("all");
-  const [createForm, setCreateForm] = useState<AgentForm>(initialCreateForm);
+  // const [createForm, setCreateForm] = useState<AgentForm>(initialCreateForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(initialEditForm);
   const [agentIdToDelete, setAgentIdToDelete] = useState<string | null>(null);
-  const { creating, savingId, deleting, runCreate, runSave, runDelete } =
-    useCrudActions();
+  // const { creating, savingId, deleting, runCreate, runSave, runDelete } =
+  //   useCrudActions();
+  const { savingId, deleting, runSave, runDelete } = useCrudActions();
 
   const effectiveItems = useMemo(
     () =>
@@ -102,33 +103,33 @@ export function AdminAgentsPage() {
     void loadAgents();
   }, [loadAgents]);
 
-  const handleCreate = async () => {
-    if (!createForm.fullName.trim() || !createForm.email.trim()) {
-      showError("Full name and email are required");
-      return;
-    }
-    if (!createForm.keycloakId.trim()) {
-      showError("Keycloak ID is required");
-      return;
-    }
+  // const handleCreate = async () => {
+  //   if (!createForm.fullName.trim() || !createForm.email.trim()) {
+  //     showError("Full name and email are required");
+  //     return;
+  //   }
+  //   if (!createForm.keycloakId.trim()) {
+  //     showError("Keycloak ID is required");
+  //     return;
+  //   }
 
-    const created = await runCreate(
-      async () =>
-        createAgent({
-          keycloakId: createForm.keycloakId.trim(),
-          fullName: createForm.fullName.trim(),
-          email: createForm.email.trim(),
-          isActive: createForm.isActive,
-        }),
-      "Failed to create agent",
-    );
+  //   const created = await runCreate(
+  //     async () =>
+  //       createAgent({
+  //         keycloakId: createForm.keycloakId.trim(),
+  //         fullName: createForm.fullName.trim(),
+  //         email: createForm.email.trim(),
+  //         isActive: createForm.isActive,
+  //       }),
+  //     "Failed to create agent",
+  //   );
 
-    if (created) {
-      setCreateForm(initialCreateForm);
-      showSuccess("Agent created successfully");
-      await loadAgents();
-    }
-  };
+  //   if (created) {
+  //     setCreateForm(initialCreateForm);
+  //     showSuccess("Agent created successfully");
+  //     await loadAgents();
+  //   }
+  // };
 
   const startEdit = (agent: User) => {
     setEditingId(agent.id);
@@ -210,7 +211,7 @@ export function AdminAgentsPage() {
       {loading ? <p className="status-note">Loading agents...</p> : null}
       {error ? <p className="error-note">{error}</p> : null}
 
-      <CrudFormCard
+      {/* <CrudFormCard
         title="Create Agent"
         submitLabel="Create agent"
         submittingLabel="Creating..."
@@ -262,7 +263,7 @@ export function AdminAgentsPage() {
           />
           Active
         </label>
-      </CrudFormCard>
+      </CrudFormCard> */}
 
       <div className="page-actions">
         <button

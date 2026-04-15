@@ -174,6 +174,16 @@ export class CampaignsService {
     return this.campaignAgentsRepository.save(assignment);
   }
 
+  async listAgents(id: string): Promise<CampaignAgent[]> {
+    await this.findById(id);
+
+    return this.campaignAgentsRepository.find({
+      where: { campaignId: id },
+      relations: { agent: true },
+      order: { assignedAt: 'DESC' },
+    });
+  }
+
   async removeAgent(id: string, agentId: string): Promise<void> {
     await this.findById(id);
 
@@ -215,6 +225,30 @@ export class CampaignsService {
     });
 
     return this.campaignTeamsRepository.save(assignment);
+  }
+
+  async listTeams(id: string): Promise<CampaignTeam[]> {
+    await this.findById(id);
+
+    return this.campaignTeamsRepository.find({
+      where: { campaignId: id },
+      relations: { team: true },
+      order: { id: 'DESC' },
+    });
+  }
+
+  async removeTeam(id: string, teamId: string): Promise<void> {
+    await this.findById(id);
+
+    const assignment = await this.campaignTeamsRepository.findOne({
+      where: { campaignId: id, teamId },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Campaign team assignment not found');
+    }
+
+    await this.campaignTeamsRepository.remove(assignment);
   }
 
   async getStats(id: string): Promise<CampaignStatsDto> {

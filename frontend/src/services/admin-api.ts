@@ -208,12 +208,14 @@ export type CampaignAgentAssignment = {
   campaignId: string;
   agentId: string;
   assignedAt: string;
+  agent?: User;
 };
 
 export type CampaignTeamAssignment = {
   id: string;
   campaignId: string;
   teamId: string;
+  team?: Team;
 };
 
 export async function getCampaigns(
@@ -303,6 +305,22 @@ export async function assignCampaignAgent(campaignId: string, agentId: string) {
   return response.data;
 }
 
+export async function getCampaignAgents(campaignId: string) {
+  const response = await apiRequest<ApiResponse<CampaignAgentAssignment[]>>(
+    `/campaigns/${campaignId}/agents`,
+  );
+  return response.data;
+}
+
+export async function removeCampaignAgent(campaignId: string, agentId: string) {
+  await apiRequest<ApiResponse<{ id: string; agentId: string }>>(
+    `/campaigns/${campaignId}/agents/${agentId}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
 export async function assignCampaignTeam(campaignId: string, teamId: string) {
   const response = await apiRequest<ApiResponse<CampaignTeamAssignment>>(
     `/campaigns/${campaignId}/teams`,
@@ -312,6 +330,22 @@ export async function assignCampaignTeam(campaignId: string, teamId: string) {
     },
   );
   return response.data;
+}
+
+export async function getCampaignTeams(campaignId: string) {
+  const response = await apiRequest<ApiResponse<CampaignTeamAssignment[]>>(
+    `/campaigns/${campaignId}/teams`,
+  );
+  return response.data;
+}
+
+export async function removeCampaignTeam(campaignId: string, teamId: string) {
+  await apiRequest<ApiResponse<{ id: string; teamId: string }>>(
+    `/campaigns/${campaignId}/teams/${teamId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export async function getAgents(

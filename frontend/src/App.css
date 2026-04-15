@@ -471,6 +471,35 @@ button.inline-action {
   background: #ffffff;
 }
 
+.management-tabs {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.management-tab {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.management-tab:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+
+.management-tab.active {
+  border-color: #0f766e;
+  background: #ccfbf1;
+  color: #0f172a;
+}
+
 .checkbox-field {
   display: inline-flex;
   align-items: center;
@@ -605,6 +634,76 @@ button.inline-action {
   font-size: 14px;
   font-family: inherit;
   background: #ffffff;
+}
+
+.list-toolbar {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+
+.list-toolbar input {
+  width: min(440px, 100%);
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+}
+
+.report-mini-chart {
+  margin: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.report-mini-chart h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #334155;
+}
+
+.report-mini-chart-bar {
+  margin-top: 10px;
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+}
+
+.report-mini-chart-bar .segment {
+  height: 100%;
+}
+
+.report-mini-chart-bar .segment.pending {
+  background: #fb923c;
+}
+
+.report-mini-chart-bar .segment.active {
+  background: #60a5fa;
+}
+
+.report-mini-chart-bar .segment.completed {
+  background: #a78bfa;
+}
+
+.report-mini-chart-bar .segment.abandoned {
+  background: #f87171;
+}
+
+.report-mini-chart-legend {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #475569;
+  font-size: 12px;
 }
 
 .inline-link-button {

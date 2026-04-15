@@ -33,6 +33,10 @@ export function AgentSessionListPage() {
   const [activeMeta, setActiveMeta] = useState<ApiMeta | undefined>();
   const [activePage, setActivePage] = useState(1);
   const [activeLoading, setActiveLoading] = useState(true);
+  const [completedItems, setCompletedItems] = useState<ChatSession[]>([]);
+  const [completedMeta, setCompletedMeta] = useState<ApiMeta | undefined>();
+  const [completedPage, setCompletedPage] = useState(1);
+  const [completedLoading, setCompletedLoading] = useState(true);
   const [error, setError] = useState("");
   const [busySessionId, setBusySessionId] = useState("");
   const [currentAgentId, setCurrentAgentId] = useState("");
@@ -116,6 +120,39 @@ export function AgentSessionListPage() {
     }
   }, [activePage, resolveAgentId]);
 
+  const refreshCompleted = useCallback(async () => {
+    setCompletedLoading(true);
+    try {
+      const resolvedAgentId = await resolveAgentId();
+      const completedResult = await getSessions({
+        status: "completed",
+        agentId: resolvedAgentId,
+        page: completedPage,
+        limit: PAGE_SIZE,
+      });
+
+      if (
+        completedPage > 1 &&
+        completedResult.items.length === 0 &&
+        (completedResult.meta?.total ?? 0) > 0
+      ) {
+        setCompletedPage((current) => Math.max(1, current - 1));
+        return;
+      }
+
+      setCompletedItems(completedResult.items);
+      setCompletedMeta(completedResult.meta);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to load completed sessions",
+      );
+    } finally {
+      setCompletedLoading(false);
+    }
+  }, [completedPage, resolveAgentId]);
+
   useEffect(() => {
     void refreshPending();
   }, [refreshPending]);
@@ -124,10 +161,14 @@ export function AgentSessionListPage() {
     void refreshActive();
   }, [refreshActive]);
 
+  useEffect(() => {
+    void refreshCompleted();
+  }, [refreshCompleted]);
+
   const refresh = useCallback(async () => {
     setError("");
-    await Promise.all([refreshPending(), refreshActive()]);
-  }, [refreshActive, refreshPending]);
+    await Promise.all([refreshPending(), refreshActive(), refreshCompleted()]);
+  }, [refreshActive, refreshCompleted, refreshPending]);
 
   useEffect(() => {
     if (!token) {
@@ -263,7 +304,7 @@ export function AgentSessionListPage() {
         </span>
       </p>
 
-      {pendingLoading || activeLoading ? (
+      {pendingLoading || activeLoading || completedLoading ? (
         <p className="status-note">Refreshing sessions...</p>
       ) : null}
       {error ? <p className="error-note">{error}</p> : null}
@@ -397,6 +438,66 @@ export function AgentSessionListPage() {
             currentCount={activeItems.length}
             loading={activeLoading}
             onPageChange={setActivePage}
+          />
+        </div>
+
+        <div className="data-panel">
+          <h2>Completed</h2>
+          {completedLoading ? (
+            <p className="status-note">Loading completed sessions...</p>
+          ) : null}
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Session</th>
+                <th>Agent</th>
+                <th>Ended</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {!completedLoading && completedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <p className="status-note">No completed sessions.</p>
+                  </td>
+                </tr>
+              ) : null}
+              {completedItems.map((session) => (
+                <tr key={session.id}>
+                  <td>{session.id}</td>
+                  <td>{session.agentId ?? "-"}</td>
+                  <td>
+                    {session.endedAt
+                      ? new Date(session.endedAt).toLocaleString()
+                      : "-"}
+                  </td>
+                  <td>
+                    <span className="status-badge completed">
+                      {session.status}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary inline-action"
+                      onClick={() => navigate(`/agent/chat/${session.id}`)}
+                    >
+                      Open Chat
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <PaginationControls
+            page={completedPage}
+            limit={PAGE_SIZE}
+            total={completedMeta?.total}
+            currentCount={completedItems.length}
+            loading={completedLoading}
+            onPageChange={setCompletedPage}
           />
         </div>
       </div>

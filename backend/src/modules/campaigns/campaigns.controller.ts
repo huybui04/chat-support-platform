@@ -81,6 +81,12 @@ export class CampaignsController {
     return apiSuccess(assignment);
   }
 
+  @Get(':id/agents')
+  async listAgents(@Param('id') id: string) {
+    const items = await this.campaignsService.listAgents(id);
+    return apiSuccess(items);
+  }
+
   @Delete(':id/agents/:agentId')
   async removeAgent(
     @Param('id') id: string,
@@ -97,6 +103,18 @@ export class CampaignsController {
   ) {
     const assignment = await this.campaignsService.assignTeam(id, payload);
     return apiSuccess(assignment);
+  }
+
+  @Get(':id/teams')
+  async listTeams(@Param('id') id: string) {
+    const items = await this.campaignsService.listTeams(id);
+    return apiSuccess(items);
+  }
+
+  @Delete(':id/teams/:teamId')
+  async removeTeam(@Param('id') id: string, @Param('teamId') teamId: string) {
+    await this.campaignsService.removeTeam(id, teamId);
+    return apiSuccess({ id, teamId });
   }
 
   @Get(':id/stats')

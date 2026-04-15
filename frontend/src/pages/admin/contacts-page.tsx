@@ -23,6 +23,8 @@ import type { ApiMeta } from "../../types/api";
 
 const PAGE_SIZE = 20;
 
+type ContactsTab = "list" | "import" | "create";
+
 type ContactForm = {
   fullName: string;
   email: string;
@@ -45,6 +47,7 @@ const initialMappingForm: ImportCsvMapping = {
 
 export function AdminContactsPage() {
   const { showError, showSuccess } = useToast();
+  const [activeTab, setActiveTab] = useState<ContactsTab>("list");
   const [items, setItems] = useState<Contact[]>([]);
   const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
   const [page, setPage] = useState(1);
@@ -65,8 +68,26 @@ export function AdminContactsPage() {
   const [importLogs, setImportLogs] = useState<CampaignImportLog[]>([]);
   const [importLogsLoading, setImportLogsLoading] = useState(false);
   const [importLogsError, setImportLogsError] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const { creating, savingId, deleting, runCreate, runSave, runDelete } =
     useCrudActions();
+
+  const filteredItems = items.filter((contact) => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    if (!keyword) {
+      return true;
+    }
+
+    return [
+      contact.fullName,
+      contact.email ?? "",
+      contact.phone ?? "",
+      contact.whatsappId ?? "",
+    ].some((value) => value.toLowerCase().includes(keyword));
+  });
+
+  const contactsWithEmail = items.filter((item) => Boolean(item.email)).length;
+  const contactsWithPhone = items.filter((item) => Boolean(item.phone)).length;
 
   const loadContacts = useCallback(async () => {
     setLoading(true);
@@ -293,6 +314,9 @@ export function AdminContactsPage() {
   return (
     <section className="placeholder-page">
       <h1>Contacts</h1>
+      <p className="status-note">
+        Choose a workflow: browse contacts, import CSV, or create manually.
+      </p>
 
       <p className="status-note">
         {meta?.total !== undefined ? `Total contacts: ${meta.total}` : null}
@@ -300,265 +324,347 @@ export function AdminContactsPage() {
       {loading ? <p className="status-note">Loading contacts...</p> : null}
       {error ? <p className="error-note">{error}</p> : null}
 
-      <div className="crud-form">
-        <h2>Import Contacts CSV</h2>
-        <p className="status-note">
-          Import theo campaign, có mapping cột CSV ({"full_name"} là bắt buộc).
-        </p>
-        <div className="crud-form-grid">
-          <select
-            value={importCampaignId}
-            disabled={importingCsv || campaigns.length === 0}
-            onChange={(event) => setImportCampaignId(event.target.value)}
-          >
-            {campaigns.length === 0 ? (
-              <option value="">No campaign available</option>
-            ) : null}
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </option>
-            ))}
-          </select>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            disabled={importingCsv}
-            onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
-          />
-          <input
-            placeholder="full_name column"
-            value={mappingForm.full_name}
-            disabled={importingCsv}
-            onChange={(event) =>
-              setMappingForm((prev) => ({
-                ...prev,
-                full_name: event.target.value,
-              }))
-            }
-          />
-          <input
-            placeholder="phone column"
-            value={mappingForm.phone}
-            disabled={importingCsv}
-            onChange={(event) =>
-              setMappingForm((prev) => ({
-                ...prev,
-                phone: event.target.value,
-              }))
-            }
-          />
-          <input
-            placeholder="email column"
-            value={mappingForm.email}
-            disabled={importingCsv}
-            onChange={(event) =>
-              setMappingForm((prev) => ({
-                ...prev,
-                email: event.target.value,
-              }))
-            }
-          />
-        </div>
-        <div className="page-actions">
-          <button
-            type="button"
-            onClick={() => void importCsv()}
-            disabled={importingCsv || campaigns.length === 0}
-          >
-            {importingCsv ? "Importing..." : "Import CSV"}
-          </button>
-        </div>
+      <div className="admin-kpi-grid">
+        <article>
+          <h3>Contacts (Current Page)</h3>
+          <p>{items.length}</p>
+        </article>
+        <article>
+          <h3>Has Email</h3>
+          <p>{contactsWithEmail}</p>
+        </article>
+        <article>
+          <h3>Has Phone</h3>
+          <p>{contactsWithPhone}</p>
+        </article>
+        <article>
+          <h3>Filtered Result</h3>
+          <p>{filteredItems.length}</p>
+        </article>
+      </div>
 
-        <div className="data-panel">
-          <h2>Recent Import Logs</h2>
-          {importLogsLoading ? (
-            <p className="status-note">Loading import logs...</p>
-          ) : null}
-          {importLogsError ? (
-            <p className="error-note">{importLogsError}</p>
-          ) : null}
-          {!importLogsLoading && !importLogsError && importLogs.length === 0 ? (
-            <p className="status-note">No import logs for selected campaign.</p>
-          ) : null}
-          {importLogs.length > 0 ? (
+      <div
+        className="management-tabs"
+        role="tablist"
+        aria-label="Contacts management sections"
+      >
+        <button
+          type="button"
+          className={`management-tab ${activeTab === "list" ? "active" : ""}`}
+          onClick={() => setActiveTab("list")}
+        >
+          Contact List
+        </button>
+        <button
+          type="button"
+          className={`management-tab ${activeTab === "import" ? "active" : ""}`}
+          onClick={() => setActiveTab("import")}
+        >
+          Import CSV
+        </button>
+        <button
+          type="button"
+          className={`management-tab ${activeTab === "create" ? "active" : ""}`}
+          onClick={() => setActiveTab("create")}
+        >
+          Create Manual
+        </button>
+      </div>
+
+      {activeTab === "import" ? (
+        <div className="crud-form">
+          <h2>Import Contacts CSV</h2>
+          <p className="status-note">
+            Import theo campaign, có mapping cột CSV ({"full_name"} là bắt
+            buộc).
+          </p>
+          <div className="crud-form-grid">
+            <select
+              value={importCampaignId}
+              disabled={importingCsv || campaigns.length === 0}
+              onChange={(event) => setImportCampaignId(event.target.value)}
+            >
+              {campaigns.length === 0 ? (
+                <option value="">No campaign available</option>
+              ) : null}
+              {campaigns.map((campaign) => (
+                <option key={campaign.id} value={campaign.id}>
+                  {campaign.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={importingCsv}
+              onChange={(event) =>
+                setImportFile(event.target.files?.[0] ?? null)
+              }
+            />
+            <input
+              placeholder="full_name column"
+              value={mappingForm.full_name}
+              disabled={importingCsv}
+              onChange={(event) =>
+                setMappingForm((prev) => ({
+                  ...prev,
+                  full_name: event.target.value,
+                }))
+              }
+            />
+            <input
+              placeholder="phone column"
+              value={mappingForm.phone}
+              disabled={importingCsv}
+              onChange={(event) =>
+                setMappingForm((prev) => ({
+                  ...prev,
+                  phone: event.target.value,
+                }))
+              }
+            />
+            <input
+              placeholder="email column"
+              value={mappingForm.email}
+              disabled={importingCsv}
+              onChange={(event) =>
+                setMappingForm((prev) => ({
+                  ...prev,
+                  email: event.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className="page-actions">
+            <button
+              type="button"
+              onClick={() => void importCsv()}
+              disabled={importingCsv || campaigns.length === 0}
+            >
+              {importingCsv ? "Importing..." : "Import CSV"}
+            </button>
+          </div>
+
+          <div className="data-panel">
+            <h2>Recent Import Logs</h2>
+            {importLogsLoading ? (
+              <p className="status-note">Loading import logs...</p>
+            ) : null}
+            {importLogsError ? (
+              <p className="error-note">{importLogsError}</p>
+            ) : null}
+            {!importLogsLoading &&
+            !importLogsError &&
+            importLogs.length === 0 ? (
+              <p className="status-note">
+                No import logs for selected campaign.
+              </p>
+            ) : null}
+            {importLogs.length > 0 ? (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Success</th>
+                    <th>Failed</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td>{log.fileName}</td>
+                      <td>{log.status}</td>
+                      <td>{log.totalRows}</td>
+                      <td>{log.successRows}</td>
+                      <td>{log.failedRows}</td>
+                      <td>{new Date(log.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === "create" ? (
+        <CrudFormCard
+          title="Create Contact (Manual)"
+          submitLabel="Create contact"
+          submittingLabel="Creating..."
+          submitting={creating}
+          onSubmit={() => void handleCreate()}
+        >
+          <input
+            placeholder="Full name"
+            value={createForm.fullName}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({
+                ...prev,
+                fullName: event.target.value,
+              }))
+            }
+          />
+          <input
+            placeholder="Email"
+            type="email"
+            value={createForm.email}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, email: event.target.value }))
+            }
+          />
+          <input
+            placeholder="Phone"
+            value={createForm.phone}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, phone: event.target.value }))
+            }
+          />
+          <input
+            placeholder="WhatsApp ID"
+            value={createForm.whatsappId}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({
+                ...prev,
+                whatsappId: event.target.value,
+              }))
+            }
+          />
+        </CrudFormCard>
+      ) : null}
+
+      {activeTab === "list" ? (
+        <>
+          <div className="list-toolbar">
+            <input
+              placeholder="Search by name, email, phone, WhatsApp ID"
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+            />
+          </div>
+
+          <div className="data-panel">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>File</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th>Success</th>
-                  <th>Failed</th>
-                  <th>Created</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>WhatsApp ID</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {importLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td>{log.fileName}</td>
-                    <td>{log.status}</td>
-                    <td>{log.totalRows}</td>
-                    <td>{log.successRows}</td>
-                    <td>{log.failedRows}</td>
-                    <td>{new Date(log.createdAt).toLocaleString()}</td>
+                {!loading && filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>
+                      <p className="status-note">
+                        No contacts match the current filter.
+                      </p>
+                    </td>
+                  </tr>
+                ) : null}
+                {filteredItems.map((contact) => (
+                  <tr key={contact.id}>
+                    <td>
+                      {editingId === contact.id ? (
+                        <input
+                          value={editForm.fullName}
+                          disabled={savingId === contact.id}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              fullName: event.target.value,
+                            }))
+                          }
+                        />
+                      ) : (
+                        contact.fullName
+                      )}
+                    </td>
+                    <td>
+                      {editingId === contact.id ? (
+                        <input
+                          type="email"
+                          value={editForm.email}
+                          disabled={savingId === contact.id}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              email: event.target.value,
+                            }))
+                          }
+                        />
+                      ) : (
+                        (contact.email ?? "-")
+                      )}
+                    </td>
+                    <td>
+                      {editingId === contact.id ? (
+                        <input
+                          value={editForm.phone}
+                          disabled={savingId === contact.id}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              phone: event.target.value,
+                            }))
+                          }
+                        />
+                      ) : (
+                        (contact.phone ?? "-")
+                      )}
+                    </td>
+                    <td>
+                      {editingId === contact.id ? (
+                        <input
+                          value={editForm.whatsappId}
+                          disabled={savingId === contact.id}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              whatsappId: event.target.value,
+                            }))
+                          }
+                        />
+                      ) : (
+                        (contact.whatsappId ?? "-")
+                      )}
+                    </td>
+                    <td>
+                      <RowActionButtons
+                        editing={editingId === contact.id}
+                        saving={savingId === contact.id}
+                        deletingDisabled={deleting}
+                        onSave={() => void saveEdit(contact.id)}
+                        onCancel={cancelEdit}
+                        onEdit={() => startEdit(contact)}
+                        onDelete={() => setContactIdToDelete(contact.id)}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : null}
-        </div>
-      </div>
+          </div>
 
-      <CrudFormCard
-        title="Create Contact (Manual)"
-        submitLabel="Create contact"
-        submittingLabel="Creating..."
-        submitting={creating}
-        onSubmit={() => void handleCreate()}
-      >
-        <input
-          placeholder="Full name"
-          value={createForm.fullName}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({ ...prev, fullName: event.target.value }))
-          }
-        />
-        <input
-          placeholder="Email"
-          type="email"
-          value={createForm.email}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({ ...prev, email: event.target.value }))
-          }
-        />
-        <input
-          placeholder="Phone"
-          value={createForm.phone}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({ ...prev, phone: event.target.value }))
-          }
-        />
-        <input
-          placeholder="WhatsApp ID"
-          value={createForm.whatsappId}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({
-              ...prev,
-              whatsappId: event.target.value,
-            }))
-          }
-        />
-      </CrudFormCard>
-
-      <div className="data-panel">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>WhatsApp ID</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((contact) => (
-              <tr key={contact.id}>
-                <td>
-                  {editingId === contact.id ? (
-                    <input
-                      value={editForm.fullName}
-                      disabled={savingId === contact.id}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          fullName: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    contact.fullName
-                  )}
-                </td>
-                <td>
-                  {editingId === contact.id ? (
-                    <input
-                      type="email"
-                      value={editForm.email}
-                      disabled={savingId === contact.id}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          email: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    (contact.email ?? "-")
-                  )}
-                </td>
-                <td>
-                  {editingId === contact.id ? (
-                    <input
-                      value={editForm.phone}
-                      disabled={savingId === contact.id}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          phone: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    (contact.phone ?? "-")
-                  )}
-                </td>
-                <td>
-                  {editingId === contact.id ? (
-                    <input
-                      value={editForm.whatsappId}
-                      disabled={savingId === contact.id}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          whatsappId: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    (contact.whatsappId ?? "-")
-                  )}
-                </td>
-                <td>
-                  <RowActionButtons
-                    editing={editingId === contact.id}
-                    saving={savingId === contact.id}
-                    deletingDisabled={deleting}
-                    onSave={() => void saveEdit(contact.id)}
-                    onCancel={cancelEdit}
-                    onEdit={() => startEdit(contact)}
-                    onDelete={() => setContactIdToDelete(contact.id)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <PaginationControls
-        page={page}
-        limit={PAGE_SIZE}
-        total={meta?.total}
-        currentCount={items.length}
-        loading={loading}
-        onPageChange={setPage}
-      />
+          <PaginationControls
+            page={page}
+            limit={PAGE_SIZE}
+            total={meta?.total}
+            currentCount={items.length}
+            loading={loading}
+            onPageChange={setPage}
+          />
+        </>
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(contactIdToDelete)}
