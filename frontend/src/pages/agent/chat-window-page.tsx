@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Socket } from "socket.io-client";
 import { useParams } from "react-router-dom";
 
@@ -12,18 +12,29 @@ import { useAuth } from "../../store/auth-context";
 import { useToast } from "../../store/toast-context";
 import type { SocketIncomingMessage } from "../../types/socket";
 
+type ConnectionState = "disconnected" | "connecting" | "connected" | "error";
+
+function formatSenderLabel(senderType: ChatMessage["senderType"]): string {
+  if (senderType === "agent") {
+    return "You";
+  }
+
+  if (senderType === "customer") {
+    return "Customer";
+  }
+
+  return "System";
+}
+
 export function AgentChatWindowPage() {
   const params = useParams();
   const { token } = useAuth();
   const { showError, showSuccess } = useToast();
 
-  const [wsUrl, setWsUrl] = useState(
-    import.meta.env.VITE_WS_URL ?? "http://localhost:3001",
-  );
-  const [sessionIdInput, setSessionIdInput] = useState("");
+  const wsUrl = import.meta.env.VITE_WS_URL ?? "http://localhost:3001";
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [connection, setConnection] = useState("disconnected");
+  const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [error, setError] = useState("");
   const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<string | null>(
@@ -33,11 +44,26 @@ export function AgentChatWindowPage() {
   const socketRef = useRef<Socket | null>(null);
   const typingTimeoutRef = useRef<number | null>(null);
   const activeSessionRef = useRef("");
-  const selectedSessionId = (params.sessionId ?? sessionIdInput).trim();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const selectedSessionId = (params.sessionId ?? "").trim();
+
+  const agentMessageCount = messages.filter(
+    (message) => message.senderType === "agent",
+  ).length;
+  const customerMessageCount = messages.filter(
+    (message) => message.senderType === "customer",
+  ).length;
 
   useEffect(() => {
     activeSessionRef.current = selectedSessionId;
   }, [selectedSessionId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages.length]);
 
   useEffect(() => {
     return () => {
@@ -49,7 +75,38 @@ export function AgentChatWindowPage() {
     };
   }, []);
 
-  const connectSocket = () => {
+  const loadMessages = useCallback(async (sessionId: string) => {
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const history = await getSessionMessages(sessionId);
+      setMessages(history);
+      setError("");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to load message history",
+      );
+    }
+  }, []);
+
+  const joinAndLoadSession = useCallback(
+    (sessionId: string, socket?: Socket | null) => {
+      const targetSocket = socket ?? socketRef.current;
+      if (!sessionId || !targetSocket || !targetSocket.connected) {
+        return;
+      }
+
+      targetSocket.emit("join_session", { sessionId });
+      void loadMessages(sessionId);
+    },
+    [loadMessages],
+  );
+
+  const connectSocket = useCallback((sessionId: string) => {
     if (!token) {
       setError("Missing access token. Please login again.");
       return;
@@ -63,6 +120,7 @@ export function AgentChatWindowPage() {
 
     socket.on("connect", () => {
       setConnection("connected");
+      joinAndLoadSession(sessionId, socket);
     });
 
     socket.on("disconnect", () => {
@@ -128,23 +186,11 @@ export function AgentChatWindowPage() {
         showSuccess("Session assignment updated in realtime");
       },
     );
-  };
-
-  const joinSession = () => {
-    if (!selectedSessionId) {
-      setError("Session id is required");
-      return;
+    if (socket.connected) {
+      setConnection("connected");
+      joinAndLoadSession(sessionId, socket);
     }
-
-    if (!socketRef.current) {
-      setError("Socket is not connected");
-      return;
-    }
-
-    setError("");
-    socketRef.current.emit("join_session", { sessionId: selectedSessionId });
-    void loadMessages();
-  };
+  }, [joinAndLoadSession, showSuccess, token, wsUrl]);
 
   const leaveSession = () => {
     if (!socketRef.current || !selectedSessionId) {
@@ -154,32 +200,34 @@ export function AgentChatWindowPage() {
     setIsOtherTyping(false);
   };
 
-  const loadMessages = async () => {
-    if (!selectedSessionId) {
-      setError("Session id is required");
-      return;
-    }
-
-    try {
-      const history = await getSessionMessages(selectedSessionId);
-      setMessages(history);
-      setError("");
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load message history",
-      );
-    }
-  };
-
   useEffect(() => {
-    if (!selectedSessionId || !socketRef.current) {
+    if (!selectedSessionId || !token) {
       return;
     }
 
-    socketRef.current.emit("join_session", { sessionId: selectedSessionId });
-  }, [selectedSessionId]);
+    const socket = socketRef.current;
+    if (!socket) {
+      connectSocket(selectedSessionId);
+      return;
+    }
+
+    if (socket.connected) {
+      setConnection("connected");
+      joinAndLoadSession(selectedSessionId, socket);
+      return;
+    }
+
+    setConnection("connecting");
+    const handleConnect = () => {
+      setConnection("connected");
+      joinAndLoadSession(selectedSessionId, socket);
+    };
+
+    socket.once("connect", handleConnect);
+    return () => {
+      socket.off("connect", handleConnect);
+    };
+  }, [connectSocket, joinAndLoadSession, selectedSessionId, token]);
 
   const sendMessage = () => {
     if (!socketRef.current || !selectedSessionId || !draft.trim()) {
@@ -193,6 +241,15 @@ export function AgentChatWindowPage() {
     });
     socketRef.current.emit("typing_stop", { sessionId: selectedSessionId });
     setDraft("");
+  };
+
+  const onDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    sendMessage();
   };
 
   const onDraftChange = (value: string) => {
@@ -234,87 +291,121 @@ export function AgentChatWindowPage() {
   };
 
   return (
-    <section className="placeholder-page">
-      <h1>Chat Window</h1>
-      <p>Realtime socket + history API for an active chat session.</p>
+    <section className="placeholder-page agent-chat-page">
+      <header className="agent-chat-hero">
+        <div>
+          <h1>Live Chat Workspace</h1>
+          <p>
+            Handle realtime conversations, monitor typing/activity, and close
+            sessions from one focused panel.
+          </p>
+        </div>
+        <div className="agent-chat-hero-meta">
+          <span className="agent-chat-session-tag">
+            Session:{" "}
+            {selectedSessionId
+              ? `#${selectedSessionId.slice(0, 10)}`
+              : "Not selected"}
+          </span>
+          <span className={`status-badge ${connection}`}>{connection}</span>
+        </div>
+      </header>
 
-      <div className="chat-controls">
-        <input
-          value={wsUrl}
-          onChange={(event) => setWsUrl(event.target.value)}
-          placeholder="WebSocket URL"
-        />
-        <input
-          value={params.sessionId ?? sessionIdInput}
-          onChange={(event) => setSessionIdInput(event.target.value)}
-          readOnly={Boolean(params.sessionId)}
-          placeholder="Session ID"
-        />
-        <button type="button" onClick={connectSocket}>
-          Connect
-        </button>
-        <button type="button" onClick={joinSession}>
-          Join
-        </button>
-        <button type="button" className="secondary" onClick={leaveSession}>
-          Leave
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void loadMessages()}
-        >
-          Load History
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void onEndSession()}
-        >
-          End Session
-        </button>
-      </div>
+      <section className="agent-chat-shell">
+        <article className="agent-chat-control-card">
+          <h2>Session Status</h2>
+          <p className="status-note">
+            Chat window auto-connects and auto-joins selected session.
+          </p>
+          <p className="status-note">WebSocket: {wsUrl}</p>
+          <p className="status-note">Session ID: {selectedSessionId || "-"}</p>
 
-      <p className="status-note with-badges">
-        Socket:
-        <span className={`status-badge ${connection}`}>{connection}</span>
-        <span>Last realtime sync:</span>
-        <span>
-          {lastRealtimeSyncAt
-            ? new Date(lastRealtimeSyncAt).toLocaleTimeString()
-            : "-"}
-        </span>
-      </p>
-      {isOtherTyping ? (
-        <p className="status-note with-badges">
-          <span className="status-badge typing">Customer is typing...</span>
-        </p>
-      ) : null}
-      {error ? <p className="error-note">{error}</p> : null}
+          <div className="agent-chat-control-actions">
+            <button type="button" className="secondary" onClick={leaveSession}>
+              Leave
+            </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={() => void onEndSession()}
+            >
+              End Session
+            </button>
+          </div>
 
-      <div className="chat-thread">
-        {messages.map((message) => (
-          <article key={message.id} className="chat-bubble">
-            <header>
-              <strong>{message.senderType}</strong>
-              <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
-            </header>
-            <p>{message.content}</p>
-          </article>
-        ))}
-      </div>
+          <div className="agent-chat-info-row">
+            <span>
+              Last realtime sync:{" "}
+              {lastRealtimeSyncAt
+                ? new Date(lastRealtimeSyncAt).toLocaleTimeString()
+                : "-"}
+            </span>
+            {isOtherTyping ? (
+              <span className="status-badge typing">Customer is typing...</span>
+            ) : null}
+          </div>
 
-      <div className="chat-composer">
-        <textarea
-          value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
-          rows={3}
-          placeholder="Type message..."
-        />
-        <button type="button" onClick={sendMessage}>
-          Send
-        </button>
-      </div>
+          {error ? <p className="error-note">{error}</p> : null}
+        </article>
+
+        <article className="agent-chat-thread-card">
+          <header className="agent-chat-thread-head">
+            <div>
+              <h2>Conversation</h2>
+              <p>{messages.length} messages</p>
+            </div>
+            <div className="agent-chat-thread-kpis">
+              <span>Agent: {agentMessageCount}</span>
+              <span>Customer: {customerMessageCount}</span>
+            </div>
+          </header>
+
+          <div className="agent-chat-thread" role="log" aria-live="polite">
+            {messages.length === 0 ? (
+              <p className="status-note">
+                No messages yet. Session history loads automatically when a
+                session is selected.
+              </p>
+            ) : null}
+
+            {messages.map((message) => (
+              <article
+                key={message.id}
+                className={`agent-chat-bubble ${message.senderType}`}
+              >
+                <header>
+                  <strong>{formatSenderLabel(message.senderType)}</strong>
+                  <span>
+                    {new Date(message.createdAt).toLocaleTimeString()}
+                  </span>
+                </header>
+                <p>{message.content}</p>
+              </article>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <div className="agent-chat-composer">
+            <textarea
+              value={draft}
+              onChange={(event) => onDraftChange(event.target.value)}
+              onKeyDown={onDraftKeyDown}
+              rows={3}
+              placeholder="Type message..."
+            />
+            <div className="agent-chat-composer-actions">
+              <small>Enter to send, Shift + Enter for new line</small>
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={!draft.trim()}
+              >
+                Send Message
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
     </section>
   );
 }
