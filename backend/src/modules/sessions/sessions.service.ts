@@ -36,6 +36,17 @@ export class SessionsService {
 
     const qb = this.sessionsRepository
       .createQueryBuilder('session')
+      .leftJoin('session.campaign', 'campaign')
+      .leftJoin('session.contact', 'contact')
+      .leftJoin('session.agent', 'agent')
+      .addSelect([
+        'campaign.id',
+        'campaign.name',
+        'contact.id',
+        'contact.fullName',
+        'agent.id',
+        'agent.fullName',
+      ])
       .orderBy('session.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -58,8 +69,19 @@ export class SessionsService {
 
     const [items, total] = await qb.getManyAndCount();
 
+    const normalizedItems = items.map((session) => {
+      const { campaign, contact, agent, ...base } = session;
+
+      return {
+        ...base,
+        campaignName: campaign?.name ?? null,
+        contactName: contact?.fullName ?? null,
+        agentName: agent?.fullName ?? null,
+      };
+    });
+
     return {
-      items,
+      items: normalizedItems,
       meta: { page, limit, total },
     };
   }
