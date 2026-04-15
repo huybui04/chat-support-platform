@@ -22,6 +22,7 @@ import { EndSessionDto } from './dto/end-session.dto';
 import { JoinSessionDto } from './dto/join-session.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { TypingDto } from './dto/typing.dto';
+import { ChatMessage } from '../../database/entities';
 
 @WebSocketGateway({
   namespace: '/chat',
@@ -98,6 +99,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit('agent_status_changed', payload);
   }
 
+  emitSessionMessage(sessionId: string, message: ChatMessage) {
+    if (!this.server) {
+      return;
+    }
+    this.server.to(sessionId).emit('new_message', { message });
+  }
+
+  emitSessionEnded(sessionId: string) {
+    if (!this.server) {
+      return;
+    }
+    this.server.to(sessionId).emit('session_ended', { sessionId });
+  }
+
   @SubscribeMessage('join_session')
   async joinSession(
     @ConnectedSocket() client: Socket,
@@ -150,9 +165,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.validatePayload(payload, EndSessionDto);
 
     await this.chatService.endSession(payload.sessionId);
-    this.server
-      .to(payload.sessionId)
-      .emit('session_ended', { sessionId: payload.sessionId });
+    this.emitSessionEnded(payload.sessionId);
   }
 
   private async validatePayload<T extends object>(

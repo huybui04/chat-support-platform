@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 
 import type { AuthUser } from '../../common/auth/auth-user.type';
 import {
+  CampaignContact,
+  CampaignContactStatus,
   ChatMessage,
   ChatSession,
   ChatSessionStatus,
@@ -23,6 +25,8 @@ export class SessionsService {
     private readonly messagesRepository: Repository<ChatMessage>,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(CampaignContact)
+    private readonly campaignContactsRepository: Repository<CampaignContact>,
     private readonly chatGateway: ChatGateway,
   ) {}
 
@@ -124,6 +128,17 @@ export class SessionsService {
     session.status = ChatSessionStatus.ACTIVE;
     session.startedAt = session.startedAt ?? new Date();
 
+    await this.campaignContactsRepository.update(
+      {
+        campaignId: session.campaignId,
+        contactId: session.contactId,
+      },
+      {
+        status: CampaignContactStatus.ASSIGNED,
+        assignedAt: new Date(),
+      },
+    );
+
     const updatedSession = await this.sessionsRepository.save(session);
     this.chatGateway.emitSessionAssigned({
       id: updatedSession.id,
@@ -137,6 +152,18 @@ export class SessionsService {
     const session = await this.findById(id);
     session.status = ChatSessionStatus.COMPLETED;
     session.endedAt = new Date();
+
+    await this.campaignContactsRepository.update(
+      {
+        campaignId: session.campaignId,
+        contactId: session.contactId,
+      },
+      {
+        status: CampaignContactStatus.COMPLETED,
+      },
+    );
+
+    this.chatGateway.emitSessionEnded(session.id);
 
     return this.sessionsRepository.save(session);
   }

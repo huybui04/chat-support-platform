@@ -635,7 +635,86 @@ campaignId=<uuid>   # required nếu kind=campaign-detail
 
 ---
 
-### 5.8 WebSocket Events
+### 5.8 WhatsApp Webhook
+
+| Method | Endpoint            | Role   | Mô tả                                    |
+| ------ | ------------------- | ------ | ---------------------------------------- |
+| GET    | `/whatsapp/webhook` | public | Verify webhook token/challenge handshake |
+| POST   | `/whatsapp/webhook` | public | Nhận tin nhắn inbound và đẩy vào session |
+
+**Query params cho GET `/whatsapp/webhook`:**
+
+```
+mode=subscribe
+challenge=<provider_challenge>
+verifyToken=<verify_token>
+```
+
+**Body mẫu cho POST `/whatsapp/webhook`:**
+
+```json
+{
+  "campaignId": "uuid",
+  "from": "84901234567",
+  "message": "Xin chao, can duoc ho tro",
+  "contactName": "Nguyen Van A"
+}
+```
+
+`campaignId` có thể bỏ qua nếu hệ thống map được từ `phone_number_id`.
+
+**Provider-style body (Meta-like) cũng được hỗ trợ:**
+
+```json
+{
+  "campaignId": "uuid",
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "changes": [
+        {
+          "value": {
+            "contacts": [
+              { "wa_id": "84901234567", "profile": { "name": "Nguyen Van A" } }
+            ],
+            "messages": [
+              {
+                "from": "84901234567",
+                "type": "text",
+                "text": { "body": "Xin chao" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Message types inbound hiện hỗ trợ:**
+
+- `text` -> lưu `message_type=text`
+- `image` -> lưu `message_type=image`
+- `document` -> lưu `message_type=file`
+
+**Config môi trường cho verify webhook:**
+
+```
+WHATSAPP_VERIFY_TOKEN=<secret_verify_token>
+WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP={"1234567890":"<campaign_uuid>"}
+WHATSAPP_APP_SECRET=<meta_app_secret>
+```
+
+**Security header cho POST webhook (khi bật `WHATSAPP_APP_SECRET`):**
+
+```
+x-hub-signature-256: sha256=<hmac_of_raw_body>
+```
+
+---
+
+### 5.9 WebSocket Events
 
 **Namespace:** `/chat`
 
