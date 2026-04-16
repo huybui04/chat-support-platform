@@ -18,7 +18,10 @@ export function SessionLists({
         <h3>Recent Pending</h3>
         <ul>
           {pendingSessions.slice(0, 8).map((session) => (
-            <li key={session.id}>{session.id}</li>
+            <li key={session.id}>
+              <span>{session.id}</span>
+              <span>{session.campaignName ?? "-"}</span>
+            </li>
           ))}
         </ul>
       </article>
@@ -29,7 +32,7 @@ export function SessionLists({
           {assignedSessions.slice(0, 8).map((session) => (
             <li key={`${session.id}-${session.agentId ?? "none"}`}>
               <span>{session.id}</span>
-              <span>{session.agentId ?? "unassigned"}</span>
+              <span>{session.campaignName ?? "-"}</span>
             </li>
           ))}
         </ul>

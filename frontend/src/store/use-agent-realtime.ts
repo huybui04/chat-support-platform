@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Socket } from "socket.io-client";
 
+import { getSessions } from "../services/agent-api";
 import { createChatSocket } from "../socket/chat-socket";
 import type {
+  AgentsOnlineSnapshot,
   AgentStatusChanged,
   SessionAssignedPayload,
   SessionPendingPayload,
@@ -36,6 +38,7 @@ export function useAgentRealtime() {
 
   const socketRef = useRef<Socket | null>(null);
   const logCounterRef = useRef(1);
+  const hasAutoConnectedRef = useRef(false);
 
   const metrics = useMemo(
     () => ({
@@ -46,7 +49,7 @@ export function useAgentRealtime() {
     [agentStatuses, assignedSessions.length, pendingSessions.length],
   );
 
-  const pushLog = (event: string, payload: unknown) => {
+  const pushLog = useCallback((event: string, payload: unknown) => {
     const log: RealtimeLogItem = {
       id: logCounterRef.current,
       at: new Date().toLocaleTimeString(),
@@ -55,9 +58,60 @@ export function useAgentRealtime() {
     };
     logCounterRef.current += 1;
     setLogs((current) => [log, ...current].slice(0, 40));
-  };
+  }, []);
 
-  const connect = () => {
+  const preloadSessions = useCallback(async () => {
+    try {
+      const [pendingResult, assignedResult] = await Promise.all([
+        getSessions({ status: "pending", page: 1, limit: 30 }),
+        getSessions({ status: "active", page: 1, limit: 30 }),
+      ]);
+
+      setPendingSessions(
+        pendingResult.items.map((item) => ({
+          id: item.id,
+          status: item.status,
+          campaignName: item.campaignName,
+        })),
+      );
+
+      setAssignedSessions(
+        assignedResult.items.map((item) => ({
+          id: item.id,
+          agentId: item.agentId,
+          campaignName: item.campaignName,
+        })),
+      );
+
+      setAgentStatuses(() => {
+        const next: Record<string, boolean> = {};
+        assignedResult.items.forEach((item) => {
+          if (item.agentId) {
+            next[item.agentId] = true;
+          }
+        });
+        return next;
+      });
+
+      pushLog("snapshot_loaded", {
+        pending: pendingResult.items.length,
+        assigned: assignedResult.items.length,
+      });
+    } catch (error) {
+      pushLog("snapshot_failed", {
+        message:
+          error instanceof Error ? error.message : "Failed to load snapshot",
+      });
+    }
+  }, [pushLog]);
+
+  const connect = useCallback(() => {
+    if (!token.trim()) {
+      setConnectionState("error");
+      pushLog("error", { message: "Missing token" });
+      return;
+    }
+
     socketRef.current?.disconnect();
 
     const socket = createChatSocket({ baseUrl: wsUrl, token });
@@ -67,21 +121,52 @@ export function useAgentRealtime() {
     socket.on("connect", () => {
       setConnectionState("connected");
       pushLog("connect", { socketId: socket.id });
+      void preloadSessions();
     });
 
     socket.on("disconnect", (reason) => {
-      setConnectionState("disconnected");
+      if (reason === "io client disconnect") {
+        setConnectionState("disconnected");
+      } else {
+        setConnectionState("reconnecting");
+      }
       pushLog("disconnect", { reason });
+    });
+
+    socket.io.on("reconnect_attempt", (attempt) => {
+      setConnectionState("reconnecting");
+      pushLog("reconnect_attempt", { attempt });
+    });
+
+    socket.io.on("reconnect_failed", () => {
+      setConnectionState("error");
+      pushLog("reconnect_failed", { message: "Unable to reconnect" });
     });
 
     socket.on("connected", (payload) => {
       pushLog("connected", payload);
     });
 
+    socket.on("agents_online_snapshot", (payload: AgentsOnlineSnapshot) => {
+      setAgentStatuses(() => {
+        const next: Record<string, boolean> = {};
+        payload.agentIds.forEach((agentId) => {
+          next[agentId] = true;
+        });
+        return next;
+      });
+      pushLog("agents_online_snapshot", payload);
+    });
+
     socket.on(
       "new_session_pending",
       (payload: { session: SessionPendingPayload }) => {
-        setPendingSessions((current) => [payload.session, ...current]);
+        setPendingSessions((current) => {
+          const withoutCurrent = current.filter(
+            (item) => item.id !== payload.session.id,
+          );
+          return [payload.session, ...withoutCurrent].slice(0, 50);
+        });
         pushLog("new_session_pending", payload);
       },
     );
@@ -89,7 +174,12 @@ export function useAgentRealtime() {
     socket.on(
       "session_assigned",
       (payload: { session: SessionAssignedPayload }) => {
-        setAssignedSessions((current) => [payload.session, ...current]);
+        setAssignedSessions((current) => {
+          const withoutCurrent = current.filter(
+            (item) => item.id !== payload.session.id,
+          );
+          return [payload.session, ...withoutCurrent].slice(0, 50);
+        });
         setPendingSessions((current) =>
           current.filter((item) => item.id !== payload.session.id),
         );
@@ -109,13 +199,27 @@ export function useAgentRealtime() {
       setConnectionState("error");
       pushLog("error", payload);
     });
-  };
+  }, [preloadSessions, pushLog, token, wsUrl]);
 
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     socketRef.current?.disconnect();
     socketRef.current = null;
     setConnectionState("disconnected");
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!token.trim() || hasAutoConnectedRef.current) {
+      return;
+    }
+
+    hasAutoConnectedRef.current = true;
+    connect();
+
+    return () => {
+      disconnect();
+      hasAutoConnectedRef.current = false;
+    };
+  }, [connect, disconnect, token]);
 
   return {
     wsUrl,

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import {
+  Campaign,
   CampaignContact,
   ChatMessage,
   ChatSession,
@@ -13,7 +14,13 @@ import { SessionsService } from './sessions.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ChatSession, ChatMessage, User, CampaignContact]),
+    TypeOrmModule.forFeature([
+      Campaign,
+      ChatSession,
+      ChatMessage,
+      User,
+      CampaignContact,
+    ]),
     ChatModule,
   ],
   controllers: [SessionsController],

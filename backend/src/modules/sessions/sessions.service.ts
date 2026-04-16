@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import type { AuthUser } from '../../common/auth/auth-user.type';
 import {
+  Campaign,
   CampaignContact,
   CampaignContactStatus,
   ChatMessage,
@@ -19,6 +20,8 @@ import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 @Injectable()
 export class SessionsService {
   constructor(
+    @InjectRepository(Campaign)
+    private readonly campaignsRepository: Repository<Campaign>,
     @InjectRepository(ChatSession)
     private readonly sessionsRepository: Repository<ChatSession>,
     @InjectRepository(ChatMessage)
@@ -108,11 +111,13 @@ export class SessionsService {
     });
 
     const createdSession = await this.sessionsRepository.save(session);
+    const campaignName = await this.resolveCampaignName(createdSession.campaignId);
 
     if (createdSession.status === ChatSessionStatus.PENDING) {
       this.chatGateway.emitNewSessionPending({
         id: createdSession.id,
         status: createdSession.status,
+        campaignName,
       });
     }
 
@@ -120,6 +125,7 @@ export class SessionsService {
       this.chatGateway.emitSessionAssigned({
         id: createdSession.id,
         agentId: createdSession.agentId,
+        campaignName,
       });
     }
 
@@ -162,9 +168,11 @@ export class SessionsService {
     );
 
     const updatedSession = await this.sessionsRepository.save(session);
+    const campaignName = await this.resolveCampaignName(updatedSession.campaignId);
     this.chatGateway.emitSessionAssigned({
       id: updatedSession.id,
       agentId: updatedSession.agentId,
+      campaignName,
     });
 
     return updatedSession;
@@ -197,5 +205,16 @@ export class SessionsService {
       where: { sessionId },
       order: { createdAt: 'ASC' },
     });
+  }
+
+  private async resolveCampaignName(
+    campaignId: string,
+  ): Promise<string | null> {
+    const campaign = await this.campaignsRepository.findOne({
+      where: { id: campaignId },
+      select: { id: true, name: true },
+    });
+
+    return campaign?.name ?? null;
   }
 }

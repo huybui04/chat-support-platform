@@ -12,6 +12,16 @@
   padding: 24px;
   background: linear-gradient(135deg, #0e1d2c 0%, #1f3b56 60%, #2a6f8e 100%);
   color: #eaf7ff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hero-meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
 }
 
 .eyebrow {
@@ -185,7 +195,21 @@ button.inline-action {
   overflow-wrap: anywhere;
 }
 
+.event-log-filters {
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+}
+
 @media (max-width: 900px) {
+  .hero {
+    flex-direction: column;
+  }
+
+  .hero-meta {
+    justify-items: start;
+  }
+
   .metrics-grid,
   .panel-grid {
     grid-template-columns: 1fr;
@@ -830,25 +854,16 @@ button.inline-action {
 
 .agent-chat-shell {
   display: grid;
-  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
-.agent-chat-control-card,
 .agent-chat-thread-card {
   border: 1px solid var(--line);
   background: #ffffff;
   border-radius: 14px;
 }
 
-.agent-chat-control-card {
-  padding: 12px;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.agent-chat-control-card h2,
 .agent-chat-thread-head h2 {
   margin: 0;
   font-size: 16px;
@@ -886,9 +901,12 @@ button.inline-action {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
 }
 
 .agent-chat-info-row {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -910,6 +928,12 @@ button.inline-action {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.agent-chat-thread-head-right {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
 }
 
 .agent-chat-thread-head p {
@@ -1273,6 +1297,20 @@ button.inline-action {
 
   .agent-chat-shell {
     grid-template-columns: 1fr;
+  }
+
+  .agent-chat-thread-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agent-chat-thread-head-right {
+    width: 100%;
+    justify-items: start;
+  }
+
+  .agent-chat-control-actions {
+    justify-content: flex-start;
   }
 
   .agent-chat-thread-card {

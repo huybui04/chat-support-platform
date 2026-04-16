@@ -30,7 +30,7 @@ const supervisorNav: NavItem[] = [
 const agentNav: NavItem[] = [
   { label: "Dashboard", to: "/agent/dashboard" },
   { label: "Session List", to: "/agent/sessions" },
-  { label: "Chat Window", to: "/agent/chat" },
+  // { label: "Chat Window", to: "/agent/chat" },
 ];
 
 export function AppShell() {

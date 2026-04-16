@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import type { Socket } from "socket.io-client";
 import { useParams } from "react-router-dom";
 
@@ -37,9 +43,6 @@ export function AgentChatWindowPage() {
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [error, setError] = useState("");
-  const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<string | null>(
-    null,
-  );
 
   const socketRef = useRef<Socket | null>(null);
   const typingTimeoutRef = useRef<number | null>(null);
@@ -106,91 +109,91 @@ export function AgentChatWindowPage() {
     [loadMessages],
   );
 
-  const connectSocket = useCallback((sessionId: string) => {
-    if (!token) {
-      setError("Missing access token. Please login again.");
-      return;
-    }
-
-    socketRef.current?.disconnect();
-    const socket = createChatSocket({ baseUrl: wsUrl, token });
-    socketRef.current = socket;
-    setConnection("connecting");
-    setError("");
-
-    socket.on("connect", () => {
-      setConnection("connected");
-      joinAndLoadSession(sessionId, socket);
-    });
-
-    socket.on("disconnect", () => {
-      setConnection("disconnected");
-    });
-
-    socket.on("error", (payload: { message?: string }) => {
-      setError(payload.message ?? "Socket error");
-      setConnection("error");
-    });
-
-    socket.on("new_message", (payload: SocketIncomingMessage) => {
-      if (payload.message.sessionId !== activeSessionRef.current) {
+  const connectSocket = useCallback(
+    (sessionId: string) => {
+      if (!token) {
+        setError("Missing access token. Please login again.");
         return;
       }
-      setMessages((current) => [...current, payload.message]);
-      setLastRealtimeSyncAt(new Date().toISOString());
-    });
 
-    socket.on(
-      "user_typing",
-      (payload: {
-        sessionId: string;
-        senderType: string;
-        isTyping: boolean;
-      }) => {
-        if (
-          payload.sessionId !== activeSessionRef.current ||
-          payload.senderType === "agent"
-        ) {
+      socketRef.current?.disconnect();
+      const socket = createChatSocket({ baseUrl: wsUrl, token });
+      socketRef.current = socket;
+      setConnection("connecting");
+      setError("");
+
+      socket.on("connect", () => {
+        setConnection("connected");
+        joinAndLoadSession(sessionId, socket);
+      });
+
+      socket.on("disconnect", () => {
+        setConnection("disconnected");
+      });
+
+      socket.on("error", (payload: { message?: string }) => {
+        setError(payload.message ?? "Socket error");
+        setConnection("error");
+      });
+
+      socket.on("new_message", (payload: SocketIncomingMessage) => {
+        if (payload.message.sessionId !== activeSessionRef.current) {
           return;
         }
-        setIsOtherTyping(payload.isTyping);
-        setLastRealtimeSyncAt(new Date().toISOString());
-      },
-    );
+        setMessages((current) => [...current, payload.message]);
+      });
 
-    socket.on("session_ended", (payload: { sessionId?: string }) => {
-      if (
-        !payload.sessionId ||
-        payload.sessionId !== activeSessionRef.current
-      ) {
-        return;
-      }
+      socket.on(
+        "user_typing",
+        (payload: {
+          sessionId: string;
+          senderType: string;
+          isTyping: boolean;
+        }) => {
+          if (
+            payload.sessionId !== activeSessionRef.current ||
+            payload.senderType === "agent"
+          ) {
+            return;
+          }
+          setIsOtherTyping(payload.isTyping);
+        },
+      );
 
-      setIsOtherTyping(false);
-      setLastRealtimeSyncAt(new Date().toISOString());
-      setError("Session was ended");
-      showSuccess("Session ended in realtime");
-    });
-
-    socket.on(
-      "session_assigned",
-      (payload: { session?: { id?: string; agentId?: string | null } }) => {
+      socket.on("session_ended", (payload: { sessionId?: string }) => {
         if (
-          !payload.session?.id ||
-          payload.session.id !== activeSessionRef.current
+          !payload.sessionId ||
+          payload.sessionId !== activeSessionRef.current
         ) {
           return;
         }
 
-        setLastRealtimeSyncAt(new Date().toISOString());
-        showSuccess("Session assignment updated in realtime");
-      },
-    );
-    if (socket.connected) {
-      setConnection("connected");
-      joinAndLoadSession(sessionId, socket);
-    }
-  }, [joinAndLoadSession, showSuccess, token, wsUrl]);
+        setIsOtherTyping(false);
+
+        setError("Session was ended");
+        showSuccess("Session ended in realtime");
+      });
+
+      socket.on(
+        "session_assigned",
+        (payload: { session?: { id?: string; agentId?: string | null } }) => {
+          if (
+            !payload.session?.id ||
+            payload.session.id !== activeSessionRef.current
+          ) {
+            return;
+          }
+
+          showSuccess("Session assignment updated in realtime");
+        },
+      );
+      if (socket.connected) {
+        setConnection("connected");
+        joinAndLoadSession(sessionId, socket);
+      }
+    },
+    [joinAndLoadSession, showSuccess, token, wsUrl],
+  );
 
   const leaveSession = () => {
     if (!socketRef.current || !selectedSessionId) {
@@ -207,17 +210,29 @@ export function AgentChatWindowPage() {
 
     const socket = socketRef.current;
     if (!socket) {
-      connectSocket(selectedSessionId);
-      return;
+      const timeoutId = window.setTimeout(() => {
+        connectSocket(selectedSessionId);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
 
     if (socket.connected) {
-      setConnection("connected");
-      joinAndLoadSession(selectedSessionId, socket);
-      return;
+      const timeoutId = window.setTimeout(() => {
+        setConnection("connected");
+        joinAndLoadSession(selectedSessionId, socket);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
 
-    setConnection("connecting");
+    window.setTimeout(() => {
+      setConnection("connecting");
+    }, 0);
     const handleConnect = () => {
       setConnection("connected");
       joinAndLoadSession(selectedSessionId, socket);
@@ -312,53 +327,42 @@ export function AgentChatWindowPage() {
       </header>
 
       <section className="agent-chat-shell">
-        <article className="agent-chat-control-card">
-          <h2>Session Status</h2>
-          <p className="status-note">
-            Chat window auto-connects and auto-joins selected session.
-          </p>
-          <p className="status-note">WebSocket: {wsUrl}</p>
-          <p className="status-note">Session ID: {selectedSessionId || "-"}</p>
-
-          <div className="agent-chat-control-actions">
-            <button type="button" className="secondary" onClick={leaveSession}>
-              Leave
-            </button>
-            <button
-              type="button"
-              className="danger"
-              onClick={() => void onEndSession()}
-            >
-              End Session
-            </button>
-          </div>
-
-          <div className="agent-chat-info-row">
-            <span>
-              Last realtime sync:{" "}
-              {lastRealtimeSyncAt
-                ? new Date(lastRealtimeSyncAt).toLocaleTimeString()
-                : "-"}
-            </span>
-            {isOtherTyping ? (
-              <span className="status-badge typing">Customer is typing...</span>
-            ) : null}
-          </div>
-
-          {error ? <p className="error-note">{error}</p> : null}
-        </article>
-
         <article className="agent-chat-thread-card">
           <header className="agent-chat-thread-head">
             <div>
               <h2>Conversation</h2>
               <p>{messages.length} messages</p>
             </div>
-            <div className="agent-chat-thread-kpis">
-              <span>Agent: {agentMessageCount}</span>
-              <span>Customer: {customerMessageCount}</span>
+            <div className="agent-chat-thread-head-right">
+              <div className="agent-chat-thread-kpis">
+                <span>Agent: {agentMessageCount}</span>
+                <span>Customer: {customerMessageCount}</span>
+              </div>
+              <div className="agent-chat-control-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={leaveSession}
+                >
+                  Leave
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => void onEndSession()}
+                >
+                  End Session
+                </button>
+              </div>
             </div>
           </header>
+
+          <div className="agent-chat-info-row">
+            {isOtherTyping ? (
+              <span className="status-badge typing">Customer is typing...</span>
+            ) : null}
+            {error ? <span className="status-badge error">{error}</span> : null}
+          </div>
 
           <div className="agent-chat-thread" role="log" aria-live="polite">
             {messages.length === 0 ? (

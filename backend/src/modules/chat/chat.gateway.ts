@@ -32,6 +32,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
+  private readonly socketToAgentId = new Map<string, string>();
+  private readonly agentOnlineSocketCount = new Map<string, number>();
+
   constructor(private readonly chatService: ChatService) {}
 
   async handleConnection(client: Socket) {
@@ -73,19 +76,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    if (user.roles.includes(UserRole.AGENT)) {
+      this.markAgentConnected(user.sub, client.id);
+    }
+
     client.emit('connected', { socketId: client.id });
   }
 
-  handleDisconnect() {}
+  handleDisconnect(client: Socket) {
+    this.markAgentDisconnected(client.id);
+  }
 
-  emitSessionAssigned(session: { id: string; agentId: string | null }) {
+  emitSessionAssigned(session: {
+    id: string;
+    agentId: string | null;
+    campaignName?: string | null;
+  }) {
     if (!this.server) {
       return;
     }
     this.server.emit('session_assigned', { session });
   }
 
-  emitNewSessionPending(session: { id: string; status: string }) {
+  emitNewSessionPending(session: {
+    id: string;
+    status: string;
+    campaignName?: string | null;
+  }) {
     if (!this.server) {
       return;
     }
@@ -97,6 +114,50 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
     this.server.emit('agent_status_changed', payload);
+  }
+
+  private emitAgentsOnlineSnapshot() {
+    if (!this.server) {
+      return;
+    }
+
+    this.server.emit('agents_online_snapshot', {
+      agentIds: [...this.agentOnlineSocketCount.keys()],
+    });
+  }
+
+  private markAgentConnected(agentId: string, socketId: string) {
+    this.socketToAgentId.set(socketId, agentId);
+
+    const current = this.agentOnlineSocketCount.get(agentId) ?? 0;
+    const next = current + 1;
+    this.agentOnlineSocketCount.set(agentId, next);
+
+    if (next === 1) {
+      this.emitAgentStatusChanged({ agentId, isOnline: true });
+    }
+
+    this.emitAgentsOnlineSnapshot();
+  }
+
+  private markAgentDisconnected(socketId: string) {
+    const agentId = this.socketToAgentId.get(socketId);
+    if (!agentId) {
+      return;
+    }
+
+    this.socketToAgentId.delete(socketId);
+
+    const current = this.agentOnlineSocketCount.get(agentId) ?? 0;
+    if (current <= 1) {
+      this.agentOnlineSocketCount.delete(agentId);
+      this.emitAgentStatusChanged({ agentId, isOnline: false });
+      this.emitAgentsOnlineSnapshot();
+      return;
+    }
+
+    this.agentOnlineSocketCount.set(agentId, current - 1);
+    this.emitAgentsOnlineSnapshot();
   }
 
   emitSessionMessage(sessionId: string, message: ChatMessage) {
