@@ -7,6 +7,7 @@ export type SessionPendingPayload = {
 export type SessionAssignedPayload = {
   id: string;
   agentId: string | null;
+  agentName?: string | null;
   campaignName?: string | null;
 };
 

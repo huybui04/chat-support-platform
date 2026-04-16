@@ -5,13 +5,8 @@ import { StatusLegend } from "../../components/common/status-legend";
 import { useAgentRealtime } from "../../store/use-agent-realtime";
 
 export function AgentDashboardPage() {
-  const {
-    pendingSessions,
-    assignedSessions,
-    metrics,
-    logs,
-    connectionState,
-  } = useAgentRealtime();
+  const { pendingSessions, assignedSessions, metrics, logs, connectionState } =
+    useAgentRealtime();
 
   return (
     <main className="dashboard">

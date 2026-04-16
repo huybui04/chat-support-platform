@@ -79,6 +79,7 @@ export function useAgentRealtime() {
         assignedResult.items.map((item) => ({
           id: item.id,
           agentId: item.agentId,
+          agentName: item.agentName,
           campaignName: item.campaignName,
         })),
       );

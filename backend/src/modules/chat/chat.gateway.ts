@@ -90,6 +90,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitSessionAssigned(session: {
     id: string;
     agentId: string | null;
+    agentName?: string | null;
     campaignName?: string | null;
   }) {
     if (!this.server) {

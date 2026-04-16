@@ -111,7 +111,9 @@ export class SessionsService {
     });
 
     const createdSession = await this.sessionsRepository.save(session);
-    const campaignName = await this.resolveCampaignName(createdSession.campaignId);
+    const campaignName = await this.resolveCampaignName(
+      createdSession.campaignId,
+    );
 
     if (createdSession.status === ChatSessionStatus.PENDING) {
       this.chatGateway.emitNewSessionPending({
@@ -122,9 +124,11 @@ export class SessionsService {
     }
 
     if (createdSession.status === ChatSessionStatus.ACTIVE) {
+      const agentName = await this.resolveAgentName(createdSession.agentId);
       this.chatGateway.emitSessionAssigned({
         id: createdSession.id,
         agentId: createdSession.agentId,
+        agentName,
         campaignName,
       });
     }
@@ -168,10 +172,14 @@ export class SessionsService {
     );
 
     const updatedSession = await this.sessionsRepository.save(session);
-    const campaignName = await this.resolveCampaignName(updatedSession.campaignId);
+    const campaignName = await this.resolveCampaignName(
+      updatedSession.campaignId,
+    );
+    const agentName = await this.resolveAgentName(updatedSession.agentId);
     this.chatGateway.emitSessionAssigned({
       id: updatedSession.id,
       agentId: updatedSession.agentId,
+      agentName,
       campaignName,
     });
 
@@ -216,5 +224,20 @@ export class SessionsService {
     });
 
     return campaign?.name ?? null;
+  }
+
+  private async resolveAgentName(
+    agentId: string | null,
+  ): Promise<string | null> {
+    if (!agentId) {
+      return null;
+    }
+
+    const agent = await this.usersRepository.findOne({
+      where: { id: agentId },
+      select: { id: true, fullName: true },
+    });
+
+    return agent?.fullName ?? null;
   }
 }
