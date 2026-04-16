@@ -357,12 +357,12 @@ export function AgentChatWindowPage() {
             </div>
           </header>
 
-          <div className="agent-chat-info-row">
+          {/* <div className="agent-chat-info-row">
             {isOtherTyping ? (
               <span className="status-badge typing">Customer is typing...</span>
             ) : null}
             {error ? <span className="status-badge error">{error}</span> : null}
-          </div>
+          </div> */}
 
           <div className="agent-chat-thread" role="log" aria-live="polite">
             {messages.length === 0 ? (
