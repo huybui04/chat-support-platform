@@ -4,8 +4,11 @@ import type { ApiResponse, PaginatedResult } from "../types/api";
 export type ChatSession = {
   id: string;
   campaignId: string;
+  campaignName?: string | null;
   contactId: string;
+  contactName?: string | null;
   agentId: string | null;
+  agentName?: string | null;
   channel: "web" | "whatsapp";
   status: "pending" | "active" | "completed" | "abandoned";
   startedAt: string | null;

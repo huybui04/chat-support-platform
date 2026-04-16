@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { PaginationControls } from "../../components/common/pagination-controls";
@@ -20,6 +20,24 @@ type RealtimeSocketState =
   | "connecting"
   | "connected"
   | "error";
+type SessionTab = "pending" | "active" | "completed";
+type SessionChannelFilter = "all" | ChatSession["channel"];
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleString();
+}
+
+function shortId(value: string): string {
+  return value.slice(0, 8);
+}
+
+function formatChannel(channel: ChatSession["channel"]): string {
+  return channel === "whatsapp" ? "WhatsApp" : "Web";
+}
 
 export function AgentSessionListPage() {
   const { token } = useAuth();
@@ -37,6 +55,10 @@ export function AgentSessionListPage() {
   const [completedMeta, setCompletedMeta] = useState<ApiMeta | undefined>();
   const [completedPage, setCompletedPage] = useState(1);
   const [completedLoading, setCompletedLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<SessionTab>("pending");
+  const [keyword, setKeyword] = useState("");
+  const [channelFilter, setChannelFilter] =
+    useState<SessionChannelFilter>("all");
   const [error, setError] = useState("");
   const [busySessionId, setBusySessionId] = useState("");
   const [currentAgentId, setCurrentAgentId] = useState("");
@@ -283,224 +305,297 @@ export function AgentSessionListPage() {
     }
   };
 
-  return (
-    <section className="placeholder-page">
-      <h1>Session List</h1>
-      <p>Live session queue with accept/end actions for agents.</p>
+  const normalizedKeyword = keyword.trim().toLowerCase();
 
-      <div className="page-actions">
-        <button type="button" onClick={() => void refresh()}>
-          Refresh
-        </button>
+  const matchesSession = useCallback(
+    (session: ChatSession) => {
+      const matchesKeyword =
+        normalizedKeyword.length === 0 ||
+        [
+          session.id,
+          session.campaignId,
+          session.contactId,
+          session.agentId ?? "",
+          session.campaignName ?? "",
+          session.contactName ?? "",
+          session.agentName ?? "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedKeyword);
+
+      const matchesChannel =
+        channelFilter === "all" || session.channel === channelFilter;
+
+      return matchesKeyword && matchesChannel;
+    },
+    [channelFilter, normalizedKeyword],
+  );
+
+  const filteredPendingItems = useMemo(() => {
+    return pendingItems.filter(matchesSession);
+  }, [matchesSession, pendingItems]);
+
+  const filteredActiveItems = useMemo(() => {
+    return activeItems.filter(matchesSession);
+  }, [activeItems, matchesSession]);
+
+  const filteredCompletedItems = useMemo(() => {
+    return completedItems.filter(matchesSession);
+  }, [completedItems, matchesSession]);
+
+  const tabConfig = [
+    {
+      id: "pending" as const,
+      label: "Pending",
+      count: pendingMeta?.total ?? pendingItems.length,
+      loading: pendingLoading,
+      items: filteredPendingItems,
+      emptyText: "No pending sessions.",
+      page: pendingPage,
+      total: pendingMeta?.total,
+      onPageChange: setPendingPage,
+      statusClass: "pending" as const,
+    },
+    {
+      id: "active" as const,
+      label: "Active",
+      count: activeMeta?.total ?? activeItems.length,
+      loading: activeLoading,
+      items: filteredActiveItems,
+      emptyText: "No active sessions.",
+      page: activePage,
+      total: activeMeta?.total,
+      onPageChange: setActivePage,
+      statusClass: "active" as const,
+    },
+    {
+      id: "completed" as const,
+      label: "Completed",
+      count: completedMeta?.total ?? completedItems.length,
+      loading: completedLoading,
+      items: filteredCompletedItems,
+      emptyText: "No completed sessions.",
+      page: completedPage,
+      total: completedMeta?.total,
+      onPageChange: setCompletedPage,
+      statusClass: "completed" as const,
+    },
+  ];
+
+  const currentTab =
+    tabConfig.find((tab) => tab.id === activeTab) ?? tabConfig[0];
+
+  return (
+    <section className="placeholder-page agent-session-page">
+      <div className="agent-session-hero">
+        <div>
+          <h1>Session Queue</h1>
+          <p>
+            Prioritize pending chats, handle active sessions, and review
+            completed conversations in one workspace.
+          </p>
+        </div>
+        <div className="agent-session-actions">
+          <button type="button" onClick={() => void refresh()}>
+            Refresh Queue
+          </button>
+        </div>
       </div>
-      <p className="status-note with-badges">
-        Queue realtime:
-        <span className={`status-badge ${socketState}`}>{socketState}</span>
-        <span>Last queue event:</span>
-        <span>
-          {lastQueueEventAt
-            ? new Date(lastQueueEventAt).toLocaleTimeString()
-            : "-"}
-        </span>
-      </p>
+
+      <div className="agent-session-kpi-grid">
+        <article>
+          <h2>Pending</h2>
+          <p>{pendingMeta?.total ?? pendingItems.length}</p>
+        </article>
+        <article>
+          <h2>Active</h2>
+          <p>{activeMeta?.total ?? activeItems.length}</p>
+        </article>
+        <article>
+          <h2>Completed</h2>
+          <p>{completedMeta?.total ?? completedItems.length}</p>
+        </article>
+        <article>
+          <h2>Realtime</h2>
+          <p>
+            <span className={`status-badge ${socketState}`}>{socketState}</span>
+          </p>
+          <small>
+            Last event:{" "}
+            {lastQueueEventAt
+              ? new Date(lastQueueEventAt).toLocaleTimeString()
+              : "-"}
+          </small>
+        </article>
+      </div>
+
+      <div className="agent-session-toolbar">
+        <input
+          type="search"
+          placeholder="Search by campaign/contact/agent name or id..."
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+        <select
+          value={channelFilter}
+          onChange={(event) =>
+            setChannelFilter(event.target.value as SessionChannelFilter)
+          }
+        >
+          <option value="all">All channels</option>
+          <option value="web">Web</option>
+          <option value="whatsapp">WhatsApp</option>
+        </select>
+      </div>
+
+      <div
+        className="management-tabs agent-session-tabs"
+        role="tablist"
+        aria-label="Session status tabs"
+      >
+        {tabConfig.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`management-tab ${activeTab === tab.id ? "active" : ""}`}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
+      </div>
 
       {pendingLoading || activeLoading || completedLoading ? (
         <p className="status-note">Refreshing sessions...</p>
       ) : null}
       {error ? <p className="error-note">{error}</p> : null}
 
-      <div className="admin-panel-grid">
-        <div className="data-panel">
-          <h2>Pending</h2>
-          {pendingLoading ? (
-            <p className="status-note">Loading pending sessions...</p>
-          ) : null}
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Session</th>
-                <th>Contact</th>
-                <th>Campaign</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!pendingLoading && pendingItems.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <p className="status-note">No pending sessions.</p>
-                  </td>
-                </tr>
-              ) : null}
-              {pendingItems.map((session) => (
-                <tr key={session.id}>
-                  <td>{session.id}</td>
-                  <td>{session.contactId}</td>
-                  <td>{session.campaignId}</td>
-                  <td>
-                    <span className="status-badge pending">
-                      {session.status}
-                    </span>
-                  </td>
-                  <td>
+      <section
+        className="agent-session-board"
+        role="tabpanel"
+        aria-label={`${currentTab.label} sessions`}
+      >
+        {currentTab.loading ? (
+          <p className="status-note">
+            Loading {currentTab.label.toLowerCase()} sessions...
+          </p>
+        ) : null}
+
+        {!currentTab.loading && currentTab.items.length === 0 ? (
+          <p className="status-note">
+            {normalizedKeyword || channelFilter !== "all"
+              ? "No sessions matched your filters."
+              : currentTab.emptyText}
+          </p>
+        ) : null}
+
+        <div className="agent-session-card-grid">
+          {currentTab.items.map((session) => {
+            const isBusy = busySessionId === session.id;
+            const canAccept = currentTab.id === "pending";
+            const canEnd = currentTab.id === "active";
+
+            return (
+              <article key={session.id} className="agent-session-card">
+                <header>
+                  <h3>Session #{shortId(session.id)}</h3>
+                  <span className={`status-badge ${currentTab.statusClass}`}>
+                    {session.status}
+                  </span>
+                </header>
+
+                <dl>
+                  <div>
+                    <dt>Campaign</dt>
+                    <dd>
+                      {session.campaignName ??
+                        `#${shortId(session.campaignId)}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Contact</dt>
+                    <dd>
+                      {session.contactName ?? `#${shortId(session.contactId)}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Agent</dt>
+                    <dd>
+                      {session.agentName ??
+                        (session.agentId
+                          ? `#${shortId(session.agentId)}`
+                          : "Unassigned")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Channel</dt>
+                    <dd>{formatChannel(session.channel)}</dd>
+                  </div>
+                  <div>
+                    <dt>Session ID</dt>
+                    <dd>{session.id}</dd>
+                  </div>
+                  <div>
+                    <dt>Contact ID</dt>
+                    <dd>{session.contactId}</dd>
+                  </div>
+                  <div>
+                    <dt>Started</dt>
+                    <dd>{formatDateTime(session.startedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Ended</dt>
+                    <dd>{formatDateTime(session.endedAt)}</dd>
+                  </div>
+                </dl>
+
+                <footer>
+                  {canAccept ? (
                     <button
                       type="button"
                       onClick={() => void onAccept(session.id)}
-                      disabled={busySessionId === session.id}
+                      disabled={isBusy}
                     >
-                      Accept
+                      {isBusy ? "Accepting..." : "Accept"}
                     </button>
-                    <button
-                      type="button"
-                      className="secondary inline-action"
-                      onClick={() => navigate(`/agent/chat/${session.id}`)}
-                    >
-                      Open Chat
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <PaginationControls
-            page={pendingPage}
-            limit={PAGE_SIZE}
-            total={pendingMeta?.total}
-            currentCount={pendingItems.length}
-            loading={pendingLoading}
-            onPageChange={setPendingPage}
-          />
-        </div>
+                  ) : null}
 
-        <div className="data-panel">
-          <h2>Active</h2>
-          {activeLoading ? (
-            <p className="status-note">Loading active sessions...</p>
-          ) : null}
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Session</th>
-                <th>Agent</th>
-                <th>Started</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!activeLoading && activeItems.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <p className="status-note">No active sessions.</p>
-                  </td>
-                </tr>
-              ) : null}
-              {activeItems.map((session) => (
-                <tr key={session.id}>
-                  <td>{session.id}</td>
-                  <td>{session.agentId ?? "-"}</td>
-                  <td>
-                    {session.startedAt
-                      ? new Date(session.startedAt).toLocaleString()
-                      : "-"}
-                  </td>
-                  <td>
-                    <span className="status-badge active">
-                      {session.status}
-                    </span>
-                  </td>
-                  <td>
+                  {canEnd ? (
                     <button
                       type="button"
-                      className="secondary"
+                      className="danger"
                       onClick={() => void onEnd(session.id)}
-                      disabled={busySessionId === session.id}
+                      disabled={isBusy}
                     >
-                      End
+                      {isBusy ? "Ending..." : "End"}
                     </button>
-                    <button
-                      type="button"
-                      className="secondary inline-action"
-                      onClick={() => navigate(`/agent/chat/${session.id}`)}
-                    >
-                      Open Chat
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <PaginationControls
-            page={activePage}
-            limit={PAGE_SIZE}
-            total={activeMeta?.total}
-            currentCount={activeItems.length}
-            loading={activeLoading}
-            onPageChange={setActivePage}
-          />
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => navigate(`/agent/chat/${session.id}`)}
+                  >
+                    Open Chat
+                  </button>
+                </footer>
+              </article>
+            );
+          })}
         </div>
 
-        <div className="data-panel">
-          <h2>Completed</h2>
-          {completedLoading ? (
-            <p className="status-note">Loading completed sessions...</p>
-          ) : null}
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Session</th>
-                <th>Agent</th>
-                <th>Ended</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!completedLoading && completedItems.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <p className="status-note">No completed sessions.</p>
-                  </td>
-                </tr>
-              ) : null}
-              {completedItems.map((session) => (
-                <tr key={session.id}>
-                  <td>{session.id}</td>
-                  <td>{session.agentId ?? "-"}</td>
-                  <td>
-                    {session.endedAt
-                      ? new Date(session.endedAt).toLocaleString()
-                      : "-"}
-                  </td>
-                  <td>
-                    <span className="status-badge completed">
-                      {session.status}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="secondary inline-action"
-                      onClick={() => navigate(`/agent/chat/${session.id}`)}
-                    >
-                      Open Chat
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <PaginationControls
-            page={completedPage}
-            limit={PAGE_SIZE}
-            total={completedMeta?.total}
-            currentCount={completedItems.length}
-            loading={completedLoading}
-            onPageChange={setCompletedPage}
-          />
-        </div>
-      </div>
+        <PaginationControls
+          page={currentTab.page}
+          limit={PAGE_SIZE}
+          total={currentTab.total}
+          currentCount={currentTab.items.length}
+          loading={currentTab.loading}
+          onPageChange={currentTab.onPageChange}
+        />
+      </section>
     </section>
   );
 }
