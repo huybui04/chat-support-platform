@@ -18,6 +18,8 @@ import { User } from './user.entity';
 export enum SessionChannel {
   WEB = 'web',
   WHATSAPP = 'whatsapp',
+  INSTAGRAM = 'instagram',
+  MESSENGER = 'messenger',
 }
 
 export enum ChatSessionStatus {

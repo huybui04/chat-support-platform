@@ -8,6 +8,7 @@ import { apiSuccess } from '../../common/utils/api-response.util';
 import { UserRole } from '../../database/entities';
 import { AcceptSessionDto } from './dto/accept-session.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
+import { ListSessionMessagesQueryDto } from './dto/list-session-messages-query.dto';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { SessionsService } from './sessions.service';
 
@@ -52,8 +53,11 @@ export class SessionsController {
   }
 
   @Get(':id/messages')
-  async listMessages(@Param('id') id: string) {
-    const messages = await this.sessionsService.listMessages(id);
-    return apiSuccess(messages);
+  async listMessages(
+    @Param('id') id: string,
+    @Query() query: ListSessionMessagesQueryDto,
+  ) {
+    const result = await this.sessionsService.listMessages(id, query);
+    return apiSuccess(result.items, result.meta);
   }
 }

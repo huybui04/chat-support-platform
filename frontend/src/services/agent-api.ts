@@ -9,7 +9,7 @@ export type ChatSession = {
   contactName?: string | null;
   agentId: string | null;
   agentName?: string | null;
-  channel: "web" | "whatsapp";
+  channel: "web" | "whatsapp" | "instagram" | "messenger";
   status: "pending" | "active" | "completed" | "abandoned";
   startedAt: string | null;
   endedAt: string | null;
@@ -82,10 +82,18 @@ export async function endSession(sessionId: string): Promise<ChatSession> {
 
 export async function getSessionMessages(
   sessionId: string,
-): Promise<ChatMessage[]> {
+  input?: { beforeMessageId?: string; limit?: number },
+): Promise<PaginatedResult<ChatMessage>> {
+  const limit = input?.limit ?? 20;
+  const searchParams = new URLSearchParams({ limit: String(limit) });
+
+  if (input?.beforeMessageId) {
+    searchParams.set("beforeMessageId", input.beforeMessageId);
+  }
+
   const response = await apiRequest<ApiResponse<ChatMessage[]>>(
-    `/sessions/${sessionId}/messages`,
+    `/sessions/${sessionId}/messages?${searchParams.toString()}`,
   );
 
-  return response.data;
+  return { items: response.data, meta: response.meta };
 }

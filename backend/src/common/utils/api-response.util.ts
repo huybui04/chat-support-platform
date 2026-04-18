@@ -2,6 +2,8 @@ export interface ApiResponseMeta {
   page?: number;
   limit?: number;
   total?: number;
+  hasMore?: boolean;
+  beforeMessageId?: string;
 }
 
 export interface ApiResponse<T> {

@@ -38,16 +38,24 @@ export function AgentChatWindowPage() {
   const { showError, showSuccess } = useToast();
 
   const wsUrl = import.meta.env.VITE_WS_URL ?? "http://localhost:3001";
+  const initialMessageLimit = 6;
+  const olderMessageLimit = 20;
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
-  const [isOtherTyping, setIsOtherTyping] = useState(false);
-  const [error, setError] = useState("");
+  const [olderMessageCursor, setOlderMessageCursor] = useState<string>();
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const typingTimeoutRef = useRef<number | null>(null);
   const activeSessionRef = useRef("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const preserveScrollOnPrependRef = useRef(false);
+  const prevScrollHeightRef = useRef(0);
   const selectedSessionId = (params.sessionId ?? "").trim();
 
   const agentMessageCount = messages.filter(
@@ -62,10 +70,27 @@ export function AgentChatWindowPage() {
   }, [selectedSessionId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
+    const container = messagesContainerRef.current;
+    if (!container) {
+      if (shouldAutoScrollRef.current) {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      }
+      return;
+    }
+
+    if (preserveScrollOnPrependRef.current) {
+      const heightDiff = container.scrollHeight - prevScrollHeightRef.current;
+      container.scrollTop = container.scrollTop + heightDiff;
+      preserveScrollOnPrependRef.current = false;
+      return;
+    }
+
+    if (shouldAutoScrollRef.current) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
   }, [messages.length]);
 
   useEffect(() => {
@@ -84,16 +109,34 @@ export function AgentChatWindowPage() {
     }
 
     try {
-      const history = await getSessionMessages(sessionId);
-      setMessages(history);
-      setError("");
+      setIsLoadingMessages(true);
+      const result = await getSessionMessages(sessionId, {
+        limit: initialMessageLimit,
+      });
+
+      setMessages(result.items);
+      setHasMoreMessages(Boolean(result.meta?.hasMore));
+      setOlderMessageCursor(result.meta?.beforeMessageId);
     } catch (caughtError) {
-      setError(
+      showError(
         caughtError instanceof Error
           ? caughtError.message
           : "Failed to load message history",
       );
+    } finally {
+      setIsLoadingMessages(false);
     }
+  }, [initialMessageLimit, showError]);
+
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return true;
+    }
+
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight < 80
+    );
   }, []);
 
   const joinAndLoadSession = useCallback(
@@ -104,6 +147,7 @@ export function AgentChatWindowPage() {
       }
 
       targetSocket.emit("join_session", { sessionId });
+      shouldAutoScrollRef.current = true;
       void loadMessages(sessionId);
     },
     [loadMessages],
@@ -112,7 +156,7 @@ export function AgentChatWindowPage() {
   const connectSocket = useCallback(
     (sessionId: string) => {
       if (!token) {
-        setError("Missing access token. Please login again.");
+        showError("Missing access token. Please login again.");
         return;
       }
 
@@ -120,7 +164,6 @@ export function AgentChatWindowPage() {
       const socket = createChatSocket({ baseUrl: wsUrl, token });
       socketRef.current = socket;
       setConnection("connecting");
-      setError("");
 
       socket.on("connect", () => {
         setConnection("connected");
@@ -132,7 +175,7 @@ export function AgentChatWindowPage() {
       });
 
       socket.on("error", (payload: { message?: string }) => {
-        setError(payload.message ?? "Socket error");
+        showError(payload.message ?? "Socket error");
         setConnection("error");
       });
 
@@ -140,25 +183,11 @@ export function AgentChatWindowPage() {
         if (payload.message.sessionId !== activeSessionRef.current) {
           return;
         }
+
+        shouldAutoScrollRef.current =
+          isNearBottom() || payload.message.senderType === "agent";
         setMessages((current) => [...current, payload.message]);
       });
-
-      socket.on(
-        "user_typing",
-        (payload: {
-          sessionId: string;
-          senderType: string;
-          isTyping: boolean;
-        }) => {
-          if (
-            payload.sessionId !== activeSessionRef.current ||
-            payload.senderType === "agent"
-          ) {
-            return;
-          }
-          setIsOtherTyping(payload.isTyping);
-        },
-      );
 
       socket.on("session_ended", (payload: { sessionId?: string }) => {
         if (
@@ -168,9 +197,7 @@ export function AgentChatWindowPage() {
           return;
         }
 
-        setIsOtherTyping(false);
-
-        setError("Session was ended");
+        showError("Session was ended");
         showSuccess("Session ended in realtime");
       });
 
@@ -187,12 +214,27 @@ export function AgentChatWindowPage() {
           showSuccess("Session assignment updated in realtime");
         },
       );
+
+      socket.on(
+        "message_error",
+        (payload: { sessionId?: string; message?: string }) => {
+          if (
+            payload.sessionId &&
+            payload.sessionId !== activeSessionRef.current
+          ) {
+            return;
+          }
+
+            const message = payload.message ?? "Failed to send message";
+            showError(message);
+        },
+      );
       if (socket.connected) {
         setConnection("connected");
         joinAndLoadSession(sessionId, socket);
       }
     },
-    [joinAndLoadSession, showSuccess, token, wsUrl],
+    [isNearBottom, joinAndLoadSession, showError, showSuccess, token, wsUrl],
   );
 
   const leaveSession = () => {
@@ -200,7 +242,6 @@ export function AgentChatWindowPage() {
       return;
     }
     socketRef.current.emit("leave_session", { sessionId: selectedSessionId });
-    setIsOtherTyping(false);
   };
 
   useEffect(() => {
@@ -285,22 +326,96 @@ export function AgentChatWindowPage() {
     }, 800);
   };
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedSessionId || isLoadingOlderMessages || isLoadingMessages) {
+      return;
+    }
+
+    if (!hasMoreMessages || !olderMessageCursor) {
+      return;
+    }
+
+    const container = messagesContainerRef.current;
+
+    prevScrollHeightRef.current = container?.scrollHeight ?? 0;
+    preserveScrollOnPrependRef.current = true;
+    shouldAutoScrollRef.current = false;
+
+    try {
+      setIsLoadingOlderMessages(true);
+
+      const result = await getSessionMessages(selectedSessionId, {
+        beforeMessageId: olderMessageCursor,
+        limit: olderMessageLimit,
+      });
+
+      setMessages((current) => [...result.items, ...current]);
+      setHasMoreMessages(Boolean(result.meta?.hasMore));
+      setOlderMessageCursor(result.meta?.beforeMessageId);
+    } catch (caughtError) {
+      preserveScrollOnPrependRef.current = false;
+      showError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Failed to load older messages",
+      );
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  }, [
+    hasMoreMessages,
+    isLoadingMessages,
+    isLoadingOlderMessages,
+    olderMessageCursor,
+    olderMessageLimit,
+    selectedSessionId,
+    showError,
+  ]);
+
+  const onThreadScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container || isLoadingOlderMessages || isLoadingMessages) {
+      return;
+    }
+
+    if (container.scrollTop <= 6) {
+      void loadOlderMessages();
+    }
+  }, [isLoadingMessages, isLoadingOlderMessages, loadOlderMessages]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || isLoadingMessages || isLoadingOlderMessages) {
+      return;
+    }
+
+    // If initial batch does not overflow, fetch older chunks automatically.
+    if (hasMoreMessages && container.scrollHeight <= container.clientHeight + 2) {
+      shouldAutoScrollRef.current = false;
+      void loadOlderMessages();
+    }
+  }, [
+    hasMoreMessages,
+    isLoadingMessages,
+    isLoadingOlderMessages,
+    loadOlderMessages,
+    messages.length,
+  ]);
+
   const onEndSession = async () => {
     if (!selectedSessionId) {
-      setError("Session id is required");
+      showError("Session id is required");
       return;
     }
 
     try {
       await endSession(selectedSessionId);
-      setError("");
       showSuccess("Session ended");
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
           : "Failed to end session";
-      setError(message);
       showError(message);
     }
   };
@@ -357,14 +472,27 @@ export function AgentChatWindowPage() {
             </div>
           </header>
 
-          {/* <div className="agent-chat-info-row">
-            {isOtherTyping ? (
-              <span className="status-badge typing">Customer is typing...</span>
-            ) : null}
-            {error ? <span className="status-badge error">{error}</span> : null}
-          </div> */}
+          
 
-          <div className="agent-chat-thread" role="log" aria-live="polite">
+          <div
+            className="agent-chat-thread"
+            role="log"
+            aria-live="polite"
+            ref={messagesContainerRef}
+            onScroll={onThreadScroll}
+          >
+            {isLoadingMessages ? (
+              <p className="status-note">Loading messages...</p>
+            ) : null}
+
+            {!isLoadingMessages && isLoadingOlderMessages ? (
+              <p className="status-note">Loading older messages...</p>
+            ) : null}
+
+            {!isLoadingMessages && !hasMoreMessages && messages.length > 0 ? (
+              <p className="status-note">Beginning of conversation</p>
+            ) : null}
+
             {messages.length === 0 ? (
               <p className="status-note">
                 No messages yet. Session history loads automatically when a

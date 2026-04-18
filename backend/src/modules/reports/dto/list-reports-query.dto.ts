@@ -1,6 +1,7 @@
 import { IsEnum, IsOptional } from 'class-validator';
 
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { CampaignChannel } from '../../../database/entities';
 
 export enum ReportsTimeWindow {
   LAST_24_HOURS = '24h',
@@ -13,4 +14,8 @@ export class ListReportsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(ReportsTimeWindow)
   window?: ReportsTimeWindow = ReportsTimeWindow.ALL;
+
+  @IsOptional()
+  @IsEnum(CampaignChannel)
+  channel?: CampaignChannel;
 }

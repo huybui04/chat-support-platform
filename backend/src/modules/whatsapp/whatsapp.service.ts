@@ -11,28 +11,29 @@ import { In, Repository } from 'typeorm';
 
 import {
   Campaign,
+  CampaignAgent,
   CampaignChannel,
+  ChannelCampaignMapping,
   CampaignContact,
   CampaignContactStatus,
+  CampaignStatus,
   ChatMessage,
   ChatSession,
   ChatSessionStatus,
   Contact,
   MessageSenderType,
-  MessageType,
   SessionChannel,
+  ExternalChannel,
+  User,
+  UserRole,
 } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
 import { SessionsService } from '../sessions/sessions.service';
+import {
+  type NormalizedInboundMessage,
+} from './whatsapp-inbound.adapter';
+import { MetaInboundAdapterRegistry } from './adapters/meta-inbound-adapter.registry';
 import { WhatsappInboundMessageDto } from './dto/whatsapp-inbound-message.dto';
-
-type NormalizedInboundMessage = {
-  from: string;
-  message: string;
-  messageType: MessageType;
-  attachmentUrl: string | null;
-  contactName?: string;
-};
 
 type ProcessedInboundMessage = {
   sessionId: string;
@@ -40,6 +41,14 @@ type ProcessedInboundMessage = {
   contactId: string;
   createdSession: boolean;
 };
+
+type PhoneNumberCampaignMap = Record<string, string | string[]>;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
 @Injectable()
 export class WhatsappService {
@@ -54,16 +63,25 @@ export class WhatsappService {
     private readonly sessionsRepository: Repository<ChatSession>,
     @InjectRepository(ChatMessage)
     private readonly messagesRepository: Repository<ChatMessage>,
+    @InjectRepository(CampaignAgent)
+    private readonly campaignAgentsRepository: Repository<CampaignAgent>,
+    @InjectRepository(ChannelCampaignMapping)
+    private readonly channelCampaignMappingsRepository: Repository<ChannelCampaignMapping>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly sessionsService: SessionsService,
     private readonly chatGateway: ChatGateway,
+    private readonly inboundAdapterRegistry: MetaInboundAdapterRegistry,
   ) {}
 
   verifyWebhook(query: {
     mode?: string;
     challenge?: string;
     verifyToken?: string;
-  }) {
-    const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN?.trim();
+  },
+  channel: ExternalChannel = ExternalChannel.WHATSAPP,
+  ) {
+    const expectedToken = this.resolveVerifyToken(channel);
 
     if (
       query.mode !== 'subscribe' ||
@@ -76,8 +94,12 @@ export class WhatsappService {
     return { challenge: query.challenge };
   }
 
-  verifyWebhookSignature(request: Request, payload: WhatsappInboundMessageDto) {
-    const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
+  verifyWebhookSignature(
+    request: Request,
+    payload: unknown,
+    channel: ExternalChannel = ExternalChannel.WHATSAPP,
+  ) {
+    const appSecret = this.resolveAppSecret(channel);
     if (!appSecret) {
       return;
     }
@@ -111,33 +133,59 @@ export class WhatsappService {
   }
 
   async handleInboundMessage(payload: WhatsappInboundMessageDto) {
-    const inboundMessages = this.normalizeInboundMessages(payload);
+    return this.handleInboundMessageByChannel(ExternalChannel.WHATSAPP, payload);
+  }
 
-    const campaign = await this.resolveCampaign(payload);
+  async handleInboundMessageByChannel(
+    channel: ExternalChannel,
+    payload: unknown,
+  ) {
+    const inboundMessages = this.inboundAdapterRegistry.normalizeInboundMessages(
+      channel,
+      payload,
+    );
+
+    const campaign = await this.resolveCampaign(channel, payload);
 
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
 
-    if (campaign.channel !== CampaignChannel.WHATSAPP) {
-      throw new ForbiddenException('Campaign channel must be whatsapp');
+    if (!this.isCampaignEligibleForInbound(campaign, channel)) {
+      throw new ForbiddenException(
+        `Campaign channel must be ${this.mapExternalToCampaignChannel(channel)}`,
+      );
     }
 
     const processed: ProcessedInboundMessage[] = [];
 
     for (const inbound of inboundMessages) {
-      const contact = await this.resolveContact(inbound);
+      const contact = await this.resolveContact(inbound, channel);
       await this.ensureCampaignContactLink(campaign.id, contact.id);
 
-      let session = await this.findOpenWhatsappSession(campaign.id, contact.id);
+      let session = await this.findOpenSession(
+        campaign.id,
+        contact.id,
+        this.mapExternalToSessionChannel(channel),
+      );
       let createdSession = false;
 
       if (!session) {
+        const autoAssignedAgentId = await this.resolveAutoAssignableAgentId(
+          campaign.id,
+        );
+
         session = await this.sessionsService.create({
           campaignId: campaign.id,
           contactId: contact.id,
-          channel: SessionChannel.WHATSAPP,
+          agentId: autoAssignedAgentId ?? undefined,
+          channel: this.mapExternalToSessionChannel(channel),
         });
+
+        if (autoAssignedAgentId) {
+          await this.markCampaignContactAssigned(campaign.id, contact.id);
+        }
+
         createdSession = true;
       }
 
@@ -169,103 +217,14 @@ export class WhatsappService {
     };
   }
 
-  private normalizeInboundMessages(
-    payload: WhatsappInboundMessageDto,
-  ): NormalizedInboundMessage[] {
-    if (payload.from && payload.message) {
-      return [
-        {
-          from: payload.from,
-          message: payload.message,
-          messageType: MessageType.TEXT,
-          attachmentUrl: null,
-          contactName: payload.contactName,
-        },
-      ];
-    }
+  private async resolveContact(
+    payload: NormalizedInboundMessage,
+    channel: ExternalChannel,
+  ) {
+    const externalContactId = this.toContactExternalId(channel, payload.from);
 
-    const normalized: NormalizedInboundMessage[] = [];
-
-    for (const entry of payload.entry ?? []) {
-      const changes = Array.isArray(entry.changes)
-        ? entry.changes
-        : ([] as unknown[]);
-
-      for (const change of changes) {
-        if (!change || typeof change !== 'object') {
-          continue;
-        }
-
-        const value =
-          'value' in change && change.value && typeof change.value === 'object'
-            ? (change.value as Record<string, unknown>)
-            : null;
-
-        if (!value) {
-          continue;
-        }
-
-        const contacts = Array.isArray(value.contacts)
-          ? value.contacts
-          : ([] as unknown[]);
-        const contactNameByWaId = new Map<string, string>();
-
-        for (const contact of contacts) {
-          if (!contact || typeof contact !== 'object') {
-            continue;
-          }
-
-          const waId =
-            'wa_id' in contact && typeof contact.wa_id === 'string'
-              ? contact.wa_id
-              : null;
-
-          const profile =
-            'profile' in contact &&
-            contact.profile &&
-            typeof contact.profile === 'object'
-              ? (contact.profile as Record<string, unknown>)
-              : null;
-
-          const name =
-            profile && typeof profile.name === 'string' ? profile.name : null;
-
-          if (waId && name) {
-            contactNameByWaId.set(waId, name);
-          }
-        }
-
-        const messages = Array.isArray(value.messages)
-          ? value.messages
-          : ([] as unknown[]);
-
-        for (const message of messages) {
-          const normalizedMessage = this.normalizeProviderMessage(
-            message,
-            contactNameByWaId,
-          );
-
-          if (!normalizedMessage) {
-            continue;
-          }
-
-          normalized.push(normalizedMessage);
-        }
-      }
-    }
-
-    if (normalized.length === 0) {
-      throw new BadRequestException(
-        'No supported inbound WhatsApp messages (text/image/document)',
-      );
-    }
-
-    return normalized;
-  }
-
-  private async resolveContact(payload: NormalizedInboundMessage) {
     const existingContact = await this.contactsRepository.findOne({
-      where: { whatsappId: payload.from },
+      where: { whatsappId: externalContactId },
     });
 
     if (existingContact) {
@@ -275,10 +234,14 @@ export class WhatsappService {
     return this.contactsRepository.save(
       this.contactsRepository.create({
         fullName: payload.contactName?.trim() || payload.from,
-        whatsappId: payload.from,
+        whatsappId: externalContactId,
         phone: null,
         email: null,
-        metadata: { source: 'whatsapp-webhook' },
+        metadata: {
+          source: `${channel}-webhook`,
+          externalContactId: payload.from,
+          channel,
+        },
       }),
     );
   }
@@ -306,224 +269,350 @@ export class WhatsappService {
     );
   }
 
-  private async findOpenWhatsappSession(campaignId: string, contactId: string) {
+  private async findOpenSession(
+    campaignId: string,
+    contactId: string,
+    sessionChannel: SessionChannel,
+  ) {
     return this.sessionsRepository.findOne({
       where: {
         campaignId,
         contactId,
-        channel: SessionChannel.WHATSAPP,
+        channel: sessionChannel,
         status: In([ChatSessionStatus.PENDING, ChatSessionStatus.ACTIVE]),
       },
       order: { updatedAt: 'DESC' },
     });
   }
 
-  private normalizeProviderMessage(
-    rawMessage: unknown,
-    contactNameByWaId: Map<string, string>,
-  ): NormalizedInboundMessage | null {
-    if (!rawMessage || typeof rawMessage !== 'object') {
+  private async markCampaignContactAssigned(
+    campaignId: string,
+    contactId: string,
+  ) {
+    await this.campaignContactsRepository.update(
+      { campaignId, contactId },
+      {
+        status: CampaignContactStatus.ASSIGNED,
+        assignedAt: new Date(),
+      },
+    );
+  }
+
+  private async resolveAutoAssignableAgentId(campaignId: string) {
+    if (!this.isAutoAssignEnabled()) {
       return null;
     }
 
-    const from =
-      'from' in rawMessage && typeof rawMessage.from === 'string'
-        ? rawMessage.from
-        : null;
-    const type =
-      'type' in rawMessage && typeof rawMessage.type === 'string'
-        ? rawMessage.type
-        : null;
+    const assignments = await this.campaignAgentsRepository.find({
+      where: { campaignId },
+      order: { assignedAt: 'ASC' },
+    });
 
-    if (!from || !type) {
+    if (assignments.length === 0) {
       return null;
     }
 
-    if (type === 'text') {
-      const text =
-        'text' in rawMessage &&
-        rawMessage.text &&
-        typeof rawMessage.text === 'object'
-          ? (rawMessage.text as Record<string, unknown>)
-          : null;
-      const textBody = text && typeof text.body === 'string' ? text.body : null;
+    const agentIds = assignments.map((assignment) => assignment.agentId);
 
-      if (!textBody) {
-        return null;
-      }
+    const onlineAgents = await this.usersRepository.find({
+      where: {
+        id: In(agentIds),
+        role: UserRole.AGENT,
+        isActive: true,
+        isOnline: true,
+      },
+      select: { id: true },
+    });
 
-      return {
-        from,
-        message: textBody,
-        messageType: MessageType.TEXT,
-        attachmentUrl: null,
-        contactName: contactNameByWaId.get(from),
-      };
+    if (onlineAgents.length === 0) {
+      return null;
     }
 
-    if (type === 'image') {
-      const image =
-        'image' in rawMessage &&
-        rawMessage.image &&
-        typeof rawMessage.image === 'object'
-          ? (rawMessage.image as Record<string, unknown>)
-          : null;
-
-      if (!image) {
-        return null;
+    const onlineAgentIds = new Set(onlineAgents.map((agent) => agent.id));
+    for (const assignment of assignments) {
+      if (onlineAgentIds.has(assignment.agentId)) {
+        return assignment.agentId;
       }
-
-      const caption =
-        typeof image.caption === 'string' && image.caption.trim().length > 0
-          ? image.caption
-          : '[image]';
-      const attachmentUrl =
-        typeof image.link === 'string'
-          ? image.link
-          : typeof image.id === 'string'
-            ? `whatsapp-media://${image.id}`
-            : null;
-
-      return {
-        from,
-        message: caption,
-        messageType: MessageType.IMAGE,
-        attachmentUrl,
-        contactName: contactNameByWaId.get(from),
-      };
-    }
-
-    if (type === 'document') {
-      const document =
-        'document' in rawMessage &&
-        rawMessage.document &&
-        typeof rawMessage.document === 'object'
-          ? (rawMessage.document as Record<string, unknown>)
-          : null;
-
-      if (!document) {
-        return null;
-      }
-
-      const fileLabel =
-        typeof document.filename === 'string' &&
-        document.filename.trim().length > 0
-          ? document.filename
-          : 'document';
-      const caption =
-        typeof document.caption === 'string' &&
-        document.caption.trim().length > 0
-          ? document.caption
-          : `[file] ${fileLabel}`;
-      const attachmentUrl =
-        typeof document.link === 'string'
-          ? document.link
-          : typeof document.id === 'string'
-            ? `whatsapp-media://${document.id}`
-            : null;
-
-      return {
-        from,
-        message: caption,
-        messageType: MessageType.FILE,
-        attachmentUrl,
-        contactName: contactNameByWaId.get(from),
-      };
     }
 
     return null;
   }
 
-  private async resolveCampaign(payload: WhatsappInboundMessageDto) {
-    const resolvedCampaignId =
-      payload.campaignId ??
-      this.resolveCampaignIdFromPhoneNumberMap(
-        this.extractPhoneNumberIds(payload),
-      );
+  private isAutoAssignEnabled() {
+    const rawFlag = process.env.WHATSAPP_AUTO_ASSIGN_ENABLED?.trim();
 
-    if (!resolvedCampaignId) {
+    return rawFlag === '1' || rawFlag?.toLowerCase() === 'true';
+  }
+
+  private async resolveCampaign(channel: ExternalChannel, payload: unknown) {
+    const payloadRecord = asRecord(payload);
+    const directCampaignId =
+      payloadRecord && typeof payloadRecord.campaignId === 'string'
+        ? payloadRecord.campaignId
+        : undefined;
+
+    if (directCampaignId) {
+      const campaign = await this.campaignsRepository.findOne({
+        where: { id: directCampaignId },
+      });
+
+      if (!campaign) {
+        throw new NotFoundException('Campaign not found');
+      }
+
+      if (!this.isCampaignEligibleForInbound(campaign, channel)) {
+        throw new ForbiddenException(
+          `Campaign is not eligible for inbound ${channel} messages`,
+        );
+      }
+
+      return campaign;
+    }
+
+    const externalAccountIds = this.inboundAdapterRegistry.extractExternalAccountIds(
+      channel,
+      payload,
+    );
+
+    const candidateCampaignIdsFromDb =
+      await this.resolveCampaignIdsFromChannelMappings(
+        channel,
+        externalAccountIds,
+      );
+    const candidateCampaignIds =
+      candidateCampaignIdsFromDb.length > 0
+        ? candidateCampaignIdsFromDb
+        : channel === ExternalChannel.WHATSAPP
+          ? this.resolveCampaignIdsFromPhoneNumberMap(externalAccountIds)
+          : [];
+
+    if (candidateCampaignIds.length === 0) {
       throw new BadRequestException(
         'campaignId is required when phone_number_id mapping is not configured',
       );
     }
 
-    const campaign = await this.campaignsRepository.findOne({
-      where: { id: resolvedCampaignId },
+    const campaigns = await this.campaignsRepository.find({
+      where: { id: In(candidateCampaignIds) },
     });
 
-    if (!campaign) {
-      throw new NotFoundException('Campaign not found');
-    }
-
-    if (campaign.channel !== CampaignChannel.WHATSAPP) {
-      throw new ForbiddenException('Campaign channel must be whatsapp');
-    }
-
-    return campaign;
-  }
-
-  private extractPhoneNumberIds(payload: WhatsappInboundMessageDto) {
-    const phoneNumberIds = new Set<string>();
-
-    if (payload.phoneNumberId) {
-      phoneNumberIds.add(payload.phoneNumberId);
-    }
-
-    for (const entry of payload.entry ?? []) {
-      const changes = Array.isArray(entry.changes)
-        ? entry.changes
-        : ([] as unknown[]);
-
-      for (const change of changes) {
-        if (!change || typeof change !== 'object') {
-          continue;
-        }
-
-        const value =
-          'value' in change && change.value && typeof change.value === 'object'
-            ? (change.value as Record<string, unknown>)
-            : null;
-
-        if (!value || !value.metadata || typeof value.metadata !== 'object') {
-          continue;
-        }
-
-        const metadata = value.metadata as Record<string, unknown>;
-        if (typeof metadata.phone_number_id === 'string') {
-          phoneNumberIds.add(metadata.phone_number_id);
-        }
+    const eligibleById = new Map<string, Campaign>();
+    for (const campaign of campaigns) {
+      if (this.isCampaignEligibleForInbound(campaign, channel)) {
+        eligibleById.set(campaign.id, campaign);
       }
     }
 
-    return Array.from(phoneNumberIds);
+    for (const campaignId of candidateCampaignIds) {
+      const selectedCampaign = eligibleById.get(campaignId);
+      if (selectedCampaign) {
+        return selectedCampaign;
+      }
+    }
+
+    throw new NotFoundException(
+      'No eligible campaign found for incoming phone_number_id',
+    );
   }
 
-  private resolveCampaignIdFromPhoneNumberMap(phoneNumberIds: string[]) {
+  private resolveCampaignIdsFromPhoneNumberMap(phoneNumberIds: string[]) {
     if (phoneNumberIds.length === 0) {
-      return null;
+      return [];
     }
 
     const rawMap = process.env.WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP?.trim();
     if (!rawMap) {
-      return null;
+      return [];
     }
 
-    let parsedMap: Record<string, string>;
+    let parsedMap: PhoneNumberCampaignMap;
     try {
-      parsedMap = JSON.parse(rawMap) as Record<string, string>;
+      parsedMap = JSON.parse(rawMap) as PhoneNumberCampaignMap;
     } catch {
       throw new BadRequestException(
         'Invalid WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP format',
       );
     }
 
+    const resolvedCampaignIds: string[] = [];
+    const seen = new Set<string>();
+
     for (const phoneNumberId of phoneNumberIds) {
-      const campaignId = parsedMap[phoneNumberId];
-      if (campaignId) {
-        return campaignId;
+      const mappedValue = parsedMap[phoneNumberId];
+      const campaignIds = Array.isArray(mappedValue)
+        ? mappedValue
+        : typeof mappedValue === 'string'
+          ? [mappedValue]
+          : [];
+
+      for (const campaignId of campaignIds) {
+        const normalizedCampaignId = campaignId.trim();
+        if (!normalizedCampaignId || seen.has(normalizedCampaignId)) {
+          continue;
+        }
+
+        seen.add(normalizedCampaignId);
+        resolvedCampaignIds.push(normalizedCampaignId);
       }
     }
 
-    return null;
+    return resolvedCampaignIds;
   }
+
+  private async resolveCampaignIdsFromChannelMappings(
+    channel: ExternalChannel,
+    externalAccountIds: string[],
+  ) {
+    if (externalAccountIds.length === 0) {
+      return [];
+    }
+
+    const mappings = await this.channelCampaignMappingsRepository.find({
+      where: {
+        channel,
+        isActive: true,
+        externalAccountId: In(externalAccountIds),
+      },
+      order: {
+        priority: 'ASC',
+        createdAt: 'ASC',
+      },
+    });
+
+    if (mappings.length === 0) {
+      return [];
+    }
+
+    const accountOrder = new Map(
+      externalAccountIds.map((externalAccountId, index) => [
+        externalAccountId,
+        index,
+      ]),
+    );
+
+    mappings.sort((left, right) => {
+      const leftOrder =
+        accountOrder.get(left.externalAccountId) ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder =
+        accountOrder.get(right.externalAccountId) ?? Number.MAX_SAFE_INTEGER;
+
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+
+      if (left.priority !== right.priority) {
+        return left.priority - right.priority;
+      }
+
+      return left.createdAt.getTime() - right.createdAt.getTime();
+    });
+
+    const resolvedCampaignIds: string[] = [];
+    const seen = new Set<string>();
+
+    for (const mapping of mappings) {
+      if (seen.has(mapping.campaignId)) {
+        continue;
+      }
+
+      seen.add(mapping.campaignId);
+      resolvedCampaignIds.push(mapping.campaignId);
+    }
+
+    return resolvedCampaignIds;
+  }
+
+  private isCampaignEligibleForInbound(
+    campaign: Campaign,
+    inboundChannel: ExternalChannel,
+  ) {
+    if (campaign.channel !== this.mapExternalToCampaignChannel(inboundChannel)) {
+      return false;
+    }
+
+    if (campaign.status !== CampaignStatus.ACTIVE) {
+      return false;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (campaign.startDate && campaign.startDate > today) {
+      return false;
+    }
+
+    if (campaign.endDate && campaign.endDate < today) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private mapExternalToCampaignChannel(channel: ExternalChannel): CampaignChannel {
+    if (channel === ExternalChannel.WHATSAPP) {
+      return CampaignChannel.WHATSAPP;
+    }
+
+    if (channel === ExternalChannel.INSTAGRAM) {
+      return CampaignChannel.INSTAGRAM;
+    }
+
+    return CampaignChannel.MESSENGER;
+  }
+
+  private mapExternalToSessionChannel(channel: ExternalChannel): SessionChannel {
+    if (channel === ExternalChannel.WHATSAPP) {
+      return SessionChannel.WHATSAPP;
+    }
+
+    if (channel === ExternalChannel.INSTAGRAM) {
+      return SessionChannel.INSTAGRAM;
+    }
+
+    return SessionChannel.MESSENGER;
+  }
+
+  private toContactExternalId(channel: ExternalChannel, from: string) {
+    if (channel === ExternalChannel.WHATSAPP) {
+      return from;
+    }
+
+    return `${channel}:${from}`;
+  }
+
+  private resolveVerifyToken(channel: ExternalChannel) {
+    if (channel === ExternalChannel.WHATSAPP) {
+      return process.env.WHATSAPP_VERIFY_TOKEN?.trim();
+    }
+
+    if (channel === ExternalChannel.INSTAGRAM) {
+      return (
+        process.env.INSTAGRAM_VERIFY_TOKEN?.trim() ??
+        process.env.META_VERIFY_TOKEN?.trim()
+      );
+    }
+
+    return (
+      process.env.MESSENGER_VERIFY_TOKEN?.trim() ??
+      process.env.META_VERIFY_TOKEN?.trim()
+    );
+  }
+
+  private resolveAppSecret(channel: ExternalChannel) {
+    if (channel === ExternalChannel.WHATSAPP) {
+      return process.env.WHATSAPP_APP_SECRET?.trim();
+    }
+
+    if (channel === ExternalChannel.INSTAGRAM) {
+      return (
+        process.env.INSTAGRAM_APP_SECRET?.trim() ??
+        process.env.META_APP_SECRET?.trim()
+      );
+    }
+
+    return (
+      process.env.MESSENGER_APP_SECRET?.trim() ??
+      process.env.META_APP_SECRET?.trim()
+    );
+  }
+
 }

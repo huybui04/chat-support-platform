@@ -238,7 +238,7 @@ users ──────────< team_members >──────── tea
 | `name`        | VARCHAR(255)                                | NOT NULL        |       |
 | `description` | TEXT                                        | NULLABLE        |       |
 | `status`      | ENUM('draft','active','paused','completed') | DEFAULT 'draft' |       |
-| `channel`     | ENUM('web','whatsapp')                      | DEFAULT 'web'   |       |
+| `channel`     | ENUM('web','whatsapp','instagram','messenger') | DEFAULT 'web'   |       |
 | `start_date`  | DATE                                        | NULLABLE        |       |
 | `end_date`    | DATE                                        | NULLABLE        |       |
 | `created_by`  | UUID                                        | FK → users.id   |       |
@@ -306,7 +306,7 @@ users ──────────< team_members >──────── tea
 | `campaign_id` | UUID                                             | FK → campaigns.id, NOT NULL |                    |
 | `contact_id`  | UUID                                             | FK → contacts.id, NOT NULL  |                    |
 | `agent_id`    | UUID                                             | FK → users.id, NULLABLE     | NULL = chưa assign |
-| `channel`     | ENUM('web','whatsapp')                           | NOT NULL                    |                    |
+| `channel`     | ENUM('web','whatsapp','instagram','messenger')  | NOT NULL                    |                    |
 | `status`      | ENUM('pending','active','completed','abandoned') | DEFAULT 'pending'           |                    |
 | `started_at`  | TIMESTAMP                                        | NULLABLE                    | Khi agent bắt đầu  |
 | `ended_at`    | TIMESTAMP                                        | NULLABLE                    |                    |
@@ -408,16 +408,40 @@ users ──────────< team_members >──────── tea
  Truy cập web chat widget (hoặc WhatsApp)
      │
      ▼
- Hệ thống tìm campaign phù hợp → Tạo chat_session (status=pending)
+ Chuẩn hóa inbound payload theo channel
+   │
+   ├── Web widget: lấy campaignId/campaignHint (nếu có)
+   └── WhatsApp: lấy phone_number_id + sender info từ webhook body
+   │
+   ▼
+ Resolve campaign
+   │
+   ├── Nếu có campaignId hợp lệ: dùng trực tiếp
+   └── Nếu không: map phone_number_id -> campaign(s)
+       + lọc campaign status=active, trong thời gian hiệu lực
+       + chọn campaign theo policy (priority/round-robin)
+   │
+   ▼
+ Find-or-create Contact (theo wa_id/phone)
+   │
+   ▼
+ Tạo chat_session (status=pending, campaign_id, contact_id, channel)
      │
      ▼
- Gửi thông báo WebSocket đến Agent Portal
+ Routing session
+   │
+   ├── Có auto-assign + có agent phù hợp: gán ngay
+   │       -> status=active, set agent_id, started_at
+   └── Không có: giữ pending và đưa vào queue
+   │
+   ▼
+ Emit `new_session_pending` (hoặc `session_assigned` nếu auto-assign)
      │
      ▼
- [Agent] nhận notification → chọn Accept
+[Agent] nhận notification → chọn Accept (nếu session pending)
      │
      ▼
- Session status = active | agent_id được gán
+ Session status = active | agent_id được gán | started_at được cập nhật
      │
      ▼
  Real-time chat qua WebSocket
@@ -639,10 +663,12 @@ campaignId=<uuid>   # required nếu kind=campaign-detail
 
 | Method | Endpoint            | Role   | Mô tả                                    |
 | ------ | ------------------- | ------ | ---------------------------------------- |
-| GET    | `/whatsapp/webhook` | public | Verify webhook token/challenge handshake |
-| POST   | `/whatsapp/webhook` | public | Nhận tin nhắn inbound và đẩy vào session |
+| GET    | `/whatsapp/webhook` | public | Verify webhook token/challenge handshake (legacy WhatsApp) |
+| POST   | `/whatsapp/webhook` | public | Nhận inbound WhatsApp và đẩy vào session |
+| GET    | `/whatsapp/:channel/webhook` | public | Verify webhook cho `whatsapp|instagram|messenger` |
+| POST   | `/whatsapp/:channel/webhook` | public | Nhận inbound theo `channel` và đẩy vào session |
 
-**Query params cho GET `/whatsapp/webhook`:**
+**Query params cho GET `/whatsapp/webhook` và `/whatsapp/:channel/webhook`:**
 
 ```
 mode=subscribe
@@ -650,7 +676,7 @@ challenge=<provider_challenge>
 verifyToken=<verify_token>
 ```
 
-**Body mẫu cho POST `/whatsapp/webhook`:**
+**Body mẫu cho POST `/whatsapp/webhook` (WhatsApp):**
 
 ```json
 {
@@ -702,9 +728,23 @@ verifyToken=<verify_token>
 
 ```
 WHATSAPP_VERIFY_TOKEN=<secret_verify_token>
+INSTAGRAM_VERIFY_TOKEN=<secret_verify_token_or_use_META_VERIFY_TOKEN>
+MESSENGER_VERIFY_TOKEN=<secret_verify_token_or_use_META_VERIFY_TOKEN>
+META_VERIFY_TOKEN=<fallback_verify_token_for_instagram_messenger>
+# one-to-one
 WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP={"1234567890":"<campaign_uuid>"}
+# one-to-many
+# WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP={"1234567890":["<campaign_uuid_1>","<campaign_uuid_2>"]}
 WHATSAPP_APP_SECRET=<meta_app_secret>
+INSTAGRAM_APP_SECRET=<meta_app_secret_or_use_META_APP_SECRET>
+MESSENGER_APP_SECRET=<meta_app_secret_or_use_META_APP_SECRET>
+META_APP_SECRET=<fallback_app_secret_for_instagram_messenger>
 ```
+
+**Routing note cho mapping nhiều campaign:**
+
+- Khi một `phone_number_id` map tới nhiều campaign, backend phải áp dụng policy chọn campaign (ví dụ `priority` hoặc `round-robin`).
+- Luôn lọc campaign hợp lệ trước khi chọn: `status=active` và trong khoảng thời gian hiệu lực.
 
 **Security header cho POST webhook (khi bật `WHATSAPP_APP_SECRET`):**
 

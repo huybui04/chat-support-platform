@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,17 +10,23 @@ import { Repository } from 'typeorm';
 
 import {
   Campaign,
+  ChannelCampaignMapping,
   ChatMessage,
   ChatSession,
   ChatSessionStatus,
+  ExternalChannel,
   MessageSenderType,
   MessageType,
   SessionChannel,
 } from '../../database/entities';
 import { SendMessageDto } from './dto/send-message.dto';
 
+type PhoneNumberCampaignMap = Record<string, string | string[]>;
+
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     @InjectRepository(ChatSession)
     private readonly sessionsRepository: Repository<ChatSession>,
@@ -27,6 +34,8 @@ export class ChatService {
     private readonly messagesRepository: Repository<ChatMessage>,
     @InjectRepository(Campaign)
     private readonly campaignsRepository: Repository<Campaign>,
+    @InjectRepository(ChannelCampaignMapping)
+    private readonly channelMappingsRepository: Repository<ChannelCampaignMapping>,
   ) {}
 
   async ensureSessionExists(sessionId: string): Promise<ChatSession> {
@@ -44,7 +53,14 @@ export class ChatService {
     const session = await this.ensureSessionExists(payload.sessionId);
 
     if (session.channel === SessionChannel.WHATSAPP) {
+      this.logger.debug(
+        `Sending WhatsApp outbound for session=${session.id} campaign=${session.campaignId}`,
+      );
       await this.sendWhatsappOutboundMessage(session, payload);
+    } else {
+      this.logger.debug(
+        `Skip WhatsApp outbound for session=${session.id} because channel=${session.channel}`,
+      );
     }
 
     const message = this.messagesRepository.create({
@@ -99,10 +115,12 @@ export class ChatService {
       throw new NotFoundException('Campaign not found for session');
     }
 
-    const phoneNumberId = this.resolvePhoneNumberIdByCampaignId(campaign.id);
+    const phoneNumberId = await this.resolvePhoneNumberIdByCampaignId(
+      campaign.id,
+    );
     if (!phoneNumberId) {
       throw new BadRequestException(
-        'Missing phone_number_id mapping for campaign in WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP',
+        'Missing phone_number_id mapping for campaign (configure channel_mappings with channel=whatsapp or WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP)',
       );
     }
 
@@ -125,6 +143,9 @@ export class ChatService {
     );
 
     if (response.ok) {
+      this.logger.debug(
+        `WhatsApp outbound success for session=${session.id} to=${to}`,
+      );
       return;
     }
 
@@ -134,23 +155,47 @@ export class ChatService {
     );
   }
 
-  private resolvePhoneNumberIdByCampaignId(campaignId: string): string | null {
+  private async resolvePhoneNumberIdByCampaignId(
+    campaignId: string,
+  ): Promise<string | null> {
+    const mapping = await this.channelMappingsRepository.findOne({
+      where: {
+        channel: ExternalChannel.WHATSAPP,
+        campaignId,
+        isActive: true,
+      },
+      order: { priority: 'ASC', createdAt: 'ASC' },
+      select: {
+        externalAccountId: true,
+      },
+    });
+
+    if (mapping?.externalAccountId?.trim()) {
+      return mapping.externalAccountId.trim();
+    }
+
     const rawMap = process.env.WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP?.trim();
     if (!rawMap) {
       return null;
     }
 
-    let parsedMap: Record<string, string>;
+    let parsedMap: PhoneNumberCampaignMap;
     try {
-      parsedMap = JSON.parse(rawMap) as Record<string, string>;
+      parsedMap = JSON.parse(rawMap) as PhoneNumberCampaignMap;
     } catch {
       throw new BadRequestException(
         'Invalid WHATSAPP_PHONE_NUMBER_CAMPAIGN_MAP format',
       );
     }
 
-    for (const [phoneNumberId, mappedCampaignId] of Object.entries(parsedMap)) {
-      if (mappedCampaignId === campaignId) {
+    for (const [phoneNumberId, mappedCampaign] of Object.entries(parsedMap)) {
+      const mappedCampaignIds = Array.isArray(mappedCampaign)
+        ? mappedCampaign
+        : typeof mappedCampaign === 'string'
+          ? [mappedCampaign]
+          : [];
+
+      if (mappedCampaignIds.includes(campaignId)) {
         return phoneNumberId;
       }
     }

@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 
 import {
   Campaign,
+  CampaignChannel,
   CampaignContact,
   ChatMessage,
   ChatSession,
@@ -64,6 +65,10 @@ export class ReportsService {
       .orderBy('c.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
+
+    if (query.channel) {
+      campaignsQb.andWhere('c.channel = :channel', { channel: query.channel });
+    }
 
     if (windowStartAt) {
       campaignsQb.andWhere('c.createdAt >= :windowStartAt', { windowStartAt });
@@ -135,6 +140,7 @@ export class ReportsService {
     const items = campaigns.map((campaign) => ({
       campaignId: campaign.id,
       name: campaign.name,
+      channel: campaign.channel,
       totalContacts: contactCountMap.get(campaign.id) ?? 0,
       sessions: sessionMap.get(campaign.id) ?? {
         pending: 0,
@@ -155,12 +161,13 @@ export class ReportsService {
 
     if (query.kind === ReportsExportKind.CAMPAIGNS) {
       const campaigns = query.all
-        ? await this.getAllCampaignReports(query.window)
+        ? await this.getAllCampaignReports(query.window, query.channel)
         : (
             await this.getCampaignsOverview({
               page: query.page,
               limit: query.limit,
               window: query.window,
+              channel: query.channel,
             })
           ).items;
 
@@ -168,6 +175,7 @@ export class ReportsService {
         [
           'campaign_id',
           'campaign_name',
+          'channel',
           'total_contacts',
           'pending_sessions',
           'active_sessions',
@@ -178,6 +186,7 @@ export class ReportsService {
         ...campaigns.map((campaign) => [
           campaign.campaignId,
           campaign.name,
+          campaign.channel,
           String(campaign.totalContacts),
           String(campaign.sessions.pending),
           String(campaign.sessions.active),
@@ -195,12 +204,13 @@ export class ReportsService {
 
     if (query.kind === ReportsExportKind.AGENTS) {
       const agents = query.all
-        ? await this.getAllAgentReports(query.window)
+        ? await this.getAllAgentReports(query.window, query.channel)
         : (
             await this.getAgentsReport({
               page: query.page,
               limit: query.limit,
               window: query.window,
+              channel: query.channel,
             })
           ).items;
 
@@ -213,6 +223,7 @@ export class ReportsService {
           'completed_sessions',
           'avg_session_duration_seconds',
           'is_online',
+          'channel_filter',
           'window',
         ],
         ...agents.map((agent) => [
@@ -223,6 +234,7 @@ export class ReportsService {
           String(agent.completedSessions),
           String(Math.round(agent.avgSessionDurationSeconds ?? 0)),
           agent.isOnline ? 'online' : 'offline',
+          query.channel ?? 'all',
           query.window ?? ReportsTimeWindow.ALL,
         ]),
       ];
@@ -236,6 +248,7 @@ export class ReportsService {
     if (query.kind === ReportsExportKind.SESSIONS) {
       const sessions = await this.getSessionsReport({
         window: query.window,
+        channel: query.channel,
       });
 
       const rows = [
@@ -246,6 +259,7 @@ export class ReportsService {
           'completed_sessions',
           'abandoned_sessions',
           'avg_session_duration_seconds',
+          'channel_filter',
           'window',
         ],
         [
@@ -255,6 +269,7 @@ export class ReportsService {
           String(sessions.byStatus.completed),
           String(sessions.byStatus.abandoned),
           String(Math.round(sessions.avgSessionDurationSeconds)),
+          query.channel ?? 'all',
           query.window ?? ReportsTimeWindow.ALL,
         ],
       ];
@@ -314,12 +329,13 @@ export class ReportsService {
 
     if (query.kind === ReportsExportKind.CAMPAIGNS) {
       const items = query.all
-        ? await this.getAllCampaignReports(query.window)
+        ? await this.getAllCampaignReports(query.window, query.channel)
         : (
             await this.getCampaignsOverview({
               page: query.page,
               limit: query.limit,
               window: query.window,
+              channel: query.channel,
             })
           ).items;
 
@@ -341,12 +357,13 @@ export class ReportsService {
 
     if (query.kind === ReportsExportKind.AGENTS) {
       const items = query.all
-        ? await this.getAllAgentReports(query.window)
+        ? await this.getAllAgentReports(query.window, query.channel)
         : (
             await this.getAgentsReport({
               page: query.page,
               limit: query.limit,
               window: query.window,
+              channel: query.channel,
             })
           ).items;
 
@@ -357,6 +374,7 @@ export class ReportsService {
             kind: ReportsExportKind.AGENTS,
             format: ReportsExportFormat.JSON,
             window,
+            channel: query.channel ?? 'all',
             all: Boolean(query.all),
             items,
           },
@@ -367,7 +385,10 @@ export class ReportsService {
     }
 
     if (query.kind === ReportsExportKind.SESSIONS) {
-      const summary = await this.getSessionsReport({ window: query.window });
+      const summary = await this.getSessionsReport({
+        window: query.window,
+        channel: query.channel,
+      });
       return {
         fileName: `sessions-summary-${timestamp}.json`,
         json: JSON.stringify(
@@ -375,6 +396,7 @@ export class ReportsService {
             kind: ReportsExportKind.SESSIONS,
             format: ReportsExportFormat.JSON,
             window,
+            channel: query.channel ?? 'all',
             all: Boolean(query.all),
             summary,
           },
@@ -414,6 +436,7 @@ export class ReportsService {
     return [
       'campaign_id',
       'campaign_name',
+      'channel',
       'total_contacts',
       'pending_sessions',
       'active_sessions',
@@ -432,12 +455,16 @@ export class ReportsService {
       'completed_sessions',
       'avg_session_duration_seconds',
       'is_online',
+      'channel_filter',
       'window',
     ];
   }
 
-  async *iterateCampaignExportRows(window?: ReportsTimeWindow) {
-    const total = await this.getCampaignExportTotal(window);
+  async *iterateCampaignExportRows(
+    window?: ReportsTimeWindow,
+    channel?: CampaignChannel,
+  ) {
+    const total = await this.getCampaignExportTotal(window, channel);
     if (total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -449,11 +476,17 @@ export class ReportsService {
     const windowLabel = window ?? ReportsTimeWindow.ALL;
 
     for (let page = 1; page <= totalPages; page += 1) {
-      const batch = await this.getCampaignsOverview({ page, limit, window });
+      const batch = await this.getCampaignsOverview({
+        page,
+        limit,
+        window,
+        channel,
+      });
       for (const campaign of batch.items) {
         yield [
           campaign.campaignId,
           campaign.name,
+          campaign.channel,
           String(campaign.totalContacts),
           String(campaign.sessions.pending),
           String(campaign.sessions.active),
@@ -465,8 +498,11 @@ export class ReportsService {
     }
   }
 
-  async *iterateAgentExportRows(window?: ReportsTimeWindow) {
-    const total = await this.getAgentExportTotal(window);
+  async *iterateAgentExportRows(
+    window?: ReportsTimeWindow,
+    channel?: CampaignChannel,
+  ) {
+    const total = await this.getAgentExportTotal(window, channel);
     if (total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -478,7 +514,7 @@ export class ReportsService {
     const windowLabel = window ?? ReportsTimeWindow.ALL;
 
     for (let page = 1; page <= totalPages; page += 1) {
-      const batch = await this.getAgentsReport({ page, limit, window });
+      const batch = await this.getAgentsReport({ page, limit, window, channel });
       for (const agent of batch.items) {
         yield [
           agent.agentId,
@@ -488,6 +524,7 @@ export class ReportsService {
           String(agent.completedSessions),
           String(Math.round(agent.avgSessionDurationSeconds ?? 0)),
           agent.isOnline ? 'online' : 'offline',
+          channel ?? 'all',
           windowLabel,
         ];
       }
@@ -641,6 +678,10 @@ export class ReportsService {
       .select(['s.agentId', 's.status', 's.startedAt', 's.endedAt'])
       .where('s.agentId IN (:...agentIds)', { agentIds });
 
+    if (query.channel) {
+      sessionsQb.andWhere('s.channel = :channel', { channel: query.channel });
+    }
+
     if (windowStartAt) {
       sessionsQb.andWhere('s.createdAt >= :windowStartAt', { windowStartAt });
     }
@@ -711,8 +752,13 @@ export class ReportsService {
     const windowStartAt = this.getWindowStartDate(query.window);
 
     const sessionsBaseQb = this.sessionsRepository.createQueryBuilder('s');
+    if (query.channel) {
+      sessionsBaseQb.andWhere('s.channel = :channel', { channel: query.channel });
+    }
     if (windowStartAt) {
-      sessionsBaseQb.where('s.createdAt >= :windowStartAt', { windowStartAt });
+      sessionsBaseQb.andWhere('s.createdAt >= :windowStartAt', {
+        windowStartAt,
+      });
     }
 
     const totalSessions = await sessionsBaseQb.getCount();
@@ -723,8 +769,12 @@ export class ReportsService {
       .addSelect('COUNT(*)', 'count')
       .groupBy('s.status');
 
+    if (query.channel) {
+      statusQb.where('s.channel = :channel', { channel: query.channel });
+    }
+
     if (windowStartAt) {
-      statusQb.where('s.createdAt >= :windowStartAt', { windowStartAt });
+      statusQb.andWhere('s.createdAt >= :windowStartAt', { windowStartAt });
     }
 
     const statusRaw = await statusQb.getRawMany<{
@@ -757,6 +807,10 @@ export class ReportsService {
       )
       .where('s.startedAt IS NOT NULL')
       .andWhere('s.endedAt IS NOT NULL');
+
+    if (query.channel) {
+      durationQb.andWhere('s.channel = :channel', { channel: query.channel });
+    }
 
     if (windowStartAt) {
       durationQb.andWhere('s.createdAt >= :windowStartAt', { windowStartAt });
@@ -805,25 +859,41 @@ export class ReportsService {
     return `"${value.replace(/"/g, '""')}"`;
   }
 
-  private async getCampaignExportTotal(window?: ReportsTimeWindow) {
+  private async getCampaignExportTotal(
+    window?: ReportsTimeWindow,
+    channel?: CampaignChannel,
+  ) {
     const result = await this.getCampaignsOverview({
       page: 1,
       limit: 1,
       window,
+      channel,
     });
     return result.meta.total;
   }
 
-  private async getAgentExportTotal(window?: ReportsTimeWindow) {
-    const result = await this.getAgentsReport({ page: 1, limit: 1, window });
+  private async getAgentExportTotal(
+    window?: ReportsTimeWindow,
+    channel?: CampaignChannel,
+  ) {
+    const result = await this.getAgentsReport({
+      page: 1,
+      limit: 1,
+      window,
+      channel,
+    });
     return result.meta.total;
   }
 
-  private async getAllCampaignReports(window?: ReportsTimeWindow) {
+  private async getAllCampaignReports(
+    window?: ReportsTimeWindow,
+    channel?: CampaignChannel,
+  ) {
     const firstPage = await this.getCampaignsOverview({
       page: 1,
       limit: 1,
       window,
+      channel,
     });
     if (firstPage.meta.total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
@@ -839,7 +909,12 @@ export class ReportsService {
     >['items'] = [];
 
     do {
-      const batch = await this.getCampaignsOverview({ page, limit, window });
+      const batch = await this.getCampaignsOverview({
+        page,
+        limit,
+        window,
+        channel,
+      });
       total = batch.meta.total;
       items.push(...batch.items);
       page += 1;
@@ -848,8 +923,16 @@ export class ReportsService {
     return items;
   }
 
-  private async getAllAgentReports(window?: ReportsTimeWindow) {
-    const firstPage = await this.getAgentsReport({ page: 1, limit: 1, window });
+  private async getAllAgentReports(
+    window?: ReportsTimeWindow,
+    channel?: CampaignChannel,
+  ) {
+    const firstPage = await this.getAgentsReport({
+      page: 1,
+      limit: 1,
+      window,
+      channel,
+    });
     if (firstPage.meta.total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -864,7 +947,7 @@ export class ReportsService {
     >['items'] = [];
 
     do {
-      const batch = await this.getAgentsReport({ page, limit, window });
+      const batch = await this.getAgentsReport({ page, limit, window, channel });
       total = batch.meta.total;
       items.push(...batch.items);
       page += 1;

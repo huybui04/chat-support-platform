@@ -21,6 +21,7 @@ type NavItem = {
 const supervisorNav: NavItem[] = [
   { label: "Dashboard", to: "/admin/dashboard" },
   { label: "Campaigns", to: "/admin/campaigns" },
+  { label: "Channel Mappings", to: "/admin/channel-mappings" },
   { label: "Agents", to: "/admin/agents" },
   { label: "Teams", to: "/admin/teams" },
   { label: "Contacts", to: "/admin/contacts" },

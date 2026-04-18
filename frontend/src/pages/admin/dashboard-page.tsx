@@ -39,6 +39,9 @@ export function AdminDashboardPage() {
     null,
   );
   const [windowFilter, setWindowFilter] = useState<ReportsWindow>("all");
+  const [channelFilter, setChannelFilter] = useState<
+    "all" | CampaignReport["channel"]
+  >("all");
 
   useEffect(() => {
     let mounted = true;
@@ -49,9 +52,22 @@ export function AdminDashboardPage() {
       try {
         const [campaignsResult, agentsResult, sessionsResult] =
           await Promise.all([
-            getCampaignReports({ page: 1, limit: 10, window: windowFilter }),
-            getAgentsReport({ page: 1, limit: 10, window: windowFilter }),
-            getSessionsReport({ window: windowFilter }),
+            getCampaignReports({
+              page: 1,
+              limit: 10,
+              window: windowFilter,
+              channel: channelFilter === "all" ? undefined : channelFilter,
+            }),
+            getAgentsReport({
+              page: 1,
+              limit: 10,
+              window: windowFilter,
+              channel: channelFilter === "all" ? undefined : channelFilter,
+            }),
+            getSessionsReport({
+              window: windowFilter,
+              channel: channelFilter === "all" ? undefined : channelFilter,
+            }),
           ]);
 
         if (!mounted) {
@@ -85,7 +101,7 @@ export function AdminDashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [windowFilter]);
+  }, [channelFilter, windowFilter]);
 
   useEffect(() => {
     if (!token || queueEventTick === 0) {
@@ -96,9 +112,22 @@ export function AdminDashboardPage() {
 
     const timer = window.setTimeout(() => {
       void Promise.all([
-        getCampaignReports({ page: 1, limit: 10, window: windowFilter }),
-        getAgentsReport({ page: 1, limit: 10, window: windowFilter }),
-        getSessionsReport({ window: windowFilter }),
+        getCampaignReports({
+          page: 1,
+          limit: 10,
+          window: windowFilter,
+          channel: channelFilter === "all" ? undefined : channelFilter,
+        }),
+        getAgentsReport({
+          page: 1,
+          limit: 10,
+          window: windowFilter,
+          channel: channelFilter === "all" ? undefined : channelFilter,
+        }),
+        getSessionsReport({
+          window: windowFilter,
+          channel: channelFilter === "all" ? undefined : channelFilter,
+        }),
       ])
         .then(([campaignsResult, agentsResult, sessionsResult]) => {
           if (cancelled) {
@@ -121,7 +150,7 @@ export function AdminDashboardPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [queueEventTick, token, windowFilter]);
+  }, [channelFilter, queueEventTick, token, windowFilter]);
 
   const onlineAgentsCount = state.agents.filter(
     (agent) => agentStatuses[agent.agentId] ?? agent.isOnline,
@@ -150,6 +179,23 @@ export function AdminDashboardPage() {
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
             <option value="all">All time</option>
+          </select>
+        </label>
+        <label>
+          Campaign channel
+          <select
+            value={channelFilter}
+            onChange={(event) =>
+              setChannelFilter(
+                event.target.value as "all" | CampaignReport["channel"],
+              )
+            }
+          >
+            <option value="all">All channels</option>
+            <option value="web">Web</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="instagram">Instagram</option>
+            <option value="messenger">Messenger</option>
           </select>
         </label>
       </div>
@@ -209,7 +255,9 @@ export function AdminDashboardPage() {
           <ul className="compact-list">
             {state.campaigns.slice(0, 5).map((campaign) => (
               <li key={campaign.campaignId}>
-                <span>{campaign.name}</span>
+                <span>
+                  {campaign.name} ({campaign.channel})
+                </span>
                 <strong>{campaign.sessions.active} active</strong>
               </li>
             ))}
