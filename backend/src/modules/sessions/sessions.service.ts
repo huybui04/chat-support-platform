@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -257,7 +261,8 @@ export class SessionsService {
 
     // Keep chronological order for UI rendering while paging newest-first.
     const items = [...pageRows].reverse();
-    const nextBeforeMessageId = hasMore && items.length > 0 ? items[0].id : undefined;
+    const nextBeforeMessageId =
+      hasMore && items.length > 0 ? items[0].id : undefined;
 
     return {
       items,

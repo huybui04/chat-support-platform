@@ -16,9 +16,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 @Injectable()
-export class WhatsappInboundAdapter
-  implements InboundProviderAdapter<WhatsappInboundMessageDto>
-{
+export class WhatsappInboundAdapter implements InboundProviderAdapter<WhatsappInboundMessageDto> {
   readonly channel = ExternalChannel.WHATSAPP;
 
   normalizeInboundMessages(

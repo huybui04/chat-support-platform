@@ -514,7 +514,12 @@ export class ReportsService {
     const windowLabel = window ?? ReportsTimeWindow.ALL;
 
     for (let page = 1; page <= totalPages; page += 1) {
-      const batch = await this.getAgentsReport({ page, limit, window, channel });
+      const batch = await this.getAgentsReport({
+        page,
+        limit,
+        window,
+        channel,
+      });
       for (const agent of batch.items) {
         yield [
           agent.agentId,
@@ -753,7 +758,9 @@ export class ReportsService {
 
     const sessionsBaseQb = this.sessionsRepository.createQueryBuilder('s');
     if (query.channel) {
-      sessionsBaseQb.andWhere('s.channel = :channel', { channel: query.channel });
+      sessionsBaseQb.andWhere('s.channel = :channel', {
+        channel: query.channel,
+      });
     }
     if (windowStartAt) {
       sessionsBaseQb.andWhere('s.createdAt >= :windowStartAt', {
@@ -947,7 +954,12 @@ export class ReportsService {
     >['items'] = [];
 
     do {
-      const batch = await this.getAgentsReport({ page, limit, window, channel });
+      const batch = await this.getAgentsReport({
+        page,
+        limit,
+        window,
+        channel,
+      });
       total = batch.meta.total;
       items.push(...batch.items);
       page += 1;

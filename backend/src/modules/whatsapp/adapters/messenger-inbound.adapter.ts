@@ -13,9 +13,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 @Injectable()
-export class MessengerInboundAdapter
-  implements InboundProviderAdapter<unknown>
-{
+export class MessengerInboundAdapter implements InboundProviderAdapter<unknown> {
   readonly channel = ExternalChannel.MESSENGER;
 
   normalizeInboundMessages(payload: unknown): NormalizedInboundMessage[] {
@@ -50,7 +48,10 @@ export class MessengerInboundAdapter
           continue;
         }
 
-        if (typeof message.text === 'string' && message.text.trim().length > 0) {
+        if (
+          typeof message.text === 'string' &&
+          message.text.trim().length > 0
+        ) {
           normalized.push({
             from: senderId,
             message: message.text,

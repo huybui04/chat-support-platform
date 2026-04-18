@@ -232,18 +232,18 @@ users ──────────< team_members >──────── tea
 
 #### Table: `campaigns`
 
-| Column        | Type                                        | Constraints     | Mô tả |
-| ------------- | ------------------------------------------- | --------------- | ----- |
-| `id`          | UUID                                        | PK              |       |
-| `name`        | VARCHAR(255)                                | NOT NULL        |       |
-| `description` | TEXT                                        | NULLABLE        |       |
-| `status`      | ENUM('draft','active','paused','completed') | DEFAULT 'draft' |       |
+| Column        | Type                                           | Constraints     | Mô tả |
+| ------------- | ---------------------------------------------- | --------------- | ----- |
+| `id`          | UUID                                           | PK              |       |
+| `name`        | VARCHAR(255)                                   | NOT NULL        |       |
+| `description` | TEXT                                           | NULLABLE        |       |
+| `status`      | ENUM('draft','active','paused','completed')    | DEFAULT 'draft' |       |
 | `channel`     | ENUM('web','whatsapp','instagram','messenger') | DEFAULT 'web'   |       |
-| `start_date`  | DATE                                        | NULLABLE        |       |
-| `end_date`    | DATE                                        | NULLABLE        |       |
-| `created_by`  | UUID                                        | FK → users.id   |       |
-| `created_at`  | TIMESTAMP                                   | DEFAULT NOW()   |       |
-| `updated_at`  | TIMESTAMP                                   | DEFAULT NOW()   |       |
+| `start_date`  | DATE                                           | NULLABLE        |       |
+| `end_date`    | DATE                                           | NULLABLE        |       |
+| `created_by`  | UUID                                           | FK → users.id   |       |
+| `created_at`  | TIMESTAMP                                      | DEFAULT NOW()   |       |
+| `updated_at`  | TIMESTAMP                                      | DEFAULT NOW()   |       |
 
 ---
 
@@ -306,7 +306,7 @@ users ──────────< team_members >──────── tea
 | `campaign_id` | UUID                                             | FK → campaigns.id, NOT NULL |                    |
 | `contact_id`  | UUID                                             | FK → contacts.id, NOT NULL  |                    |
 | `agent_id`    | UUID                                             | FK → users.id, NULLABLE     | NULL = chưa assign |
-| `channel`     | ENUM('web','whatsapp','instagram','messenger')  | NOT NULL                    |                    |
+| `channel`     | ENUM('web','whatsapp','instagram','messenger')   | NOT NULL                    |                    |
 | `status`      | ENUM('pending','active','completed','abandoned') | DEFAULT 'pending'           |                    |
 | `started_at`  | TIMESTAMP                                        | NULLABLE                    | Khi agent bắt đầu  |
 | `ended_at`    | TIMESTAMP                                        | NULLABLE                    |                    |
@@ -661,12 +661,12 @@ campaignId=<uuid>   # required nếu kind=campaign-detail
 
 ### 5.8 WhatsApp Webhook
 
-| Method | Endpoint            | Role   | Mô tả                                    |
-| ------ | ------------------- | ------ | ---------------------------------------- |
-| GET    | `/whatsapp/webhook` | public | Verify webhook token/challenge handshake (legacy WhatsApp) |
-| POST   | `/whatsapp/webhook` | public | Nhận inbound WhatsApp và đẩy vào session |
-| GET    | `/whatsapp/:channel/webhook` | public | Verify webhook cho `whatsapp|instagram|messenger` |
-| POST   | `/whatsapp/:channel/webhook` | public | Nhận inbound theo `channel` và đẩy vào session |
+| Method | Endpoint                     | Role   | Mô tả                                                      |
+| ------ | ---------------------------- | ------ | ---------------------------------------------------------- | --------- | ---------- |
+| GET    | `/whatsapp/webhook`          | public | Verify webhook token/challenge handshake (legacy WhatsApp) |
+| POST   | `/whatsapp/webhook`          | public | Nhận inbound WhatsApp và đẩy vào session                   |
+| GET    | `/whatsapp/:channel/webhook` | public | Verify webhook cho `whatsapp                               | instagram | messenger` |
+| POST   | `/whatsapp/:channel/webhook` | public | Nhận inbound theo `channel` và đẩy vào session             |
 
 **Query params cho GET `/whatsapp/webhook` và `/whatsapp/:channel/webhook`:**
 

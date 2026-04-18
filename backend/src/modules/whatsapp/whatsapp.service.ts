@@ -29,9 +29,7 @@ import {
 } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
 import { SessionsService } from '../sessions/sessions.service';
-import {
-  type NormalizedInboundMessage,
-} from './whatsapp-inbound.adapter';
+import { type NormalizedInboundMessage } from './whatsapp-inbound.adapter';
 import { MetaInboundAdapterRegistry } from './adapters/meta-inbound-adapter.registry';
 import { WhatsappInboundMessageDto } from './dto/whatsapp-inbound-message.dto';
 
@@ -74,12 +72,13 @@ export class WhatsappService {
     private readonly inboundAdapterRegistry: MetaInboundAdapterRegistry,
   ) {}
 
-  verifyWebhook(query: {
-    mode?: string;
-    challenge?: string;
-    verifyToken?: string;
-  },
-  channel: ExternalChannel = ExternalChannel.WHATSAPP,
+  verifyWebhook(
+    query: {
+      mode?: string;
+      challenge?: string;
+      verifyToken?: string;
+    },
+    channel: ExternalChannel = ExternalChannel.WHATSAPP,
   ) {
     const expectedToken = this.resolveVerifyToken(channel);
 
@@ -133,17 +132,18 @@ export class WhatsappService {
   }
 
   async handleInboundMessage(payload: WhatsappInboundMessageDto) {
-    return this.handleInboundMessageByChannel(ExternalChannel.WHATSAPP, payload);
+    return this.handleInboundMessageByChannel(
+      ExternalChannel.WHATSAPP,
+      payload,
+    );
   }
 
   async handleInboundMessageByChannel(
     channel: ExternalChannel,
     payload: unknown,
   ) {
-    const inboundMessages = this.inboundAdapterRegistry.normalizeInboundMessages(
-      channel,
-      payload,
-    );
+    const inboundMessages =
+      this.inboundAdapterRegistry.normalizeInboundMessages(channel, payload);
 
     const campaign = await this.resolveCampaign(channel, payload);
 
@@ -369,10 +369,8 @@ export class WhatsappService {
       return campaign;
     }
 
-    const externalAccountIds = this.inboundAdapterRegistry.extractExternalAccountIds(
-      channel,
-      payload,
-    );
+    const externalAccountIds =
+      this.inboundAdapterRegistry.extractExternalAccountIds(channel, payload);
 
     const candidateCampaignIdsFromDb =
       await this.resolveCampaignIdsFromChannelMappings(
@@ -526,7 +524,9 @@ export class WhatsappService {
     campaign: Campaign,
     inboundChannel: ExternalChannel,
   ) {
-    if (campaign.channel !== this.mapExternalToCampaignChannel(inboundChannel)) {
+    if (
+      campaign.channel !== this.mapExternalToCampaignChannel(inboundChannel)
+    ) {
       return false;
     }
 
@@ -547,7 +547,9 @@ export class WhatsappService {
     return true;
   }
 
-  private mapExternalToCampaignChannel(channel: ExternalChannel): CampaignChannel {
+  private mapExternalToCampaignChannel(
+    channel: ExternalChannel,
+  ): CampaignChannel {
     if (channel === ExternalChannel.WHATSAPP) {
       return CampaignChannel.WHATSAPP;
     }
@@ -559,7 +561,9 @@ export class WhatsappService {
     return CampaignChannel.MESSENGER;
   }
 
-  private mapExternalToSessionChannel(channel: ExternalChannel): SessionChannel {
+  private mapExternalToSessionChannel(
+    channel: ExternalChannel,
+  ): SessionChannel {
     if (channel === ExternalChannel.WHATSAPP) {
       return SessionChannel.WHATSAPP;
     }
@@ -614,5 +618,4 @@ export class WhatsappService {
       process.env.META_APP_SECRET?.trim()
     );
   }
-
 }

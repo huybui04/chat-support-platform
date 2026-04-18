@@ -69,23 +69,27 @@ export function AdminChannelMappingsPage() {
   const [filterChannel, setFilterChannel] = useState<ExternalChannel | "all">(
     () => {
       const value = searchParams.get("channel");
-      if (value === "whatsapp" || value === "instagram" || value === "messenger") {
+      if (
+        value === "whatsapp" ||
+        value === "instagram" ||
+        value === "messenger"
+      ) {
         return value;
       }
 
       return "all";
     },
   );
-  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">(
-    () => {
-      const value = searchParams.get("active");
-      if (value === "active" || value === "inactive") {
-        return value;
-      }
+  const [filterActive, setFilterActive] = useState<
+    "all" | "active" | "inactive"
+  >(() => {
+    const value = searchParams.get("active");
+    if (value === "active" || value === "inactive") {
+      return value;
+    }
 
-      return "all";
-    },
-  );
+    return "all";
+  });
   const [filterCampaignId, setFilterCampaignId] = useState<string>(
     () => searchParams.get("campaignId") ?? "all",
   );
@@ -208,7 +212,14 @@ export function AdminChannelMappingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterActive, filterCampaignId, filterChannel, page, sortDirection, sortField]);
+  }, [
+    filterActive,
+    filterCampaignId,
+    filterChannel,
+    page,
+    sortDirection,
+    sortField,
+  ]);
 
   useEffect(() => {
     void loadMappings();
@@ -274,8 +285,9 @@ export function AdminChannelMappingsPage() {
         }
 
         const dedupedCampaigns = Array.from(
-          new Map(mergedCampaigns.map((campaign) => [campaign.id, campaign]))
-            .values(),
+          new Map(
+            mergedCampaigns.map((campaign) => [campaign.id, campaign]),
+          ).values(),
         );
 
         if (cancelled) {
@@ -441,7 +453,11 @@ export function AdminChannelMappingsPage() {
         </article>
         <article>
           <h2>Channel Scope</h2>
-          <p>{filterChannel === "all" ? "All" : formatChannelLabel(filterChannel)}</p>
+          <p>
+            {filterChannel === "all"
+              ? "All"
+              : formatChannelLabel(filterChannel)}
+          </p>
         </article>
       </div>
 
@@ -715,7 +731,8 @@ export function AdminChannelMappingsPage() {
                       ))}
                     </select>
                   ) : (
-                    campaignNameById.get(mapping.campaignId) ?? mapping.campaignId
+                    (campaignNameById.get(mapping.campaignId) ??
+                    mapping.campaignId)
                   )}
                 </td>
                 <td>
@@ -728,7 +745,10 @@ export function AdminChannelMappingsPage() {
                       onChange={(event) =>
                         setEditForm((prev) => ({
                           ...prev,
-                          priority: Math.max(1, Number(event.target.value || 1)),
+                          priority: Math.max(
+                            1,
+                            Number(event.target.value || 1),
+                          ),
                         }))
                       }
                     />

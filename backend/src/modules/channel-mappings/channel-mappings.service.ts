@@ -2,10 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import {
-  Campaign,
-  ChannelCampaignMapping,
-} from '../../database/entities';
+import { Campaign, ChannelCampaignMapping } from '../../database/entities';
 import { CreateChannelMappingDto } from './dto/create-channel-mapping.dto';
 import {
   ChannelMappingsSortBy,
@@ -28,7 +25,8 @@ export class ChannelMappingsService {
     const limit = query.limit ?? 20;
     const sortBy = query.sortBy ?? ChannelMappingsSortBy.CREATED_AT;
     const sortOrder =
-      query.sortOrder?.toUpperCase() === ChannelMappingsSortOrder.ASC.toUpperCase()
+      query.sortOrder?.toUpperCase() ===
+      ChannelMappingsSortOrder.ASC.toUpperCase()
         ? 'ASC'
         : 'DESC';
 

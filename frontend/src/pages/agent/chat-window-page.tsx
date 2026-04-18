@@ -103,30 +103,33 @@ export function AgentChatWindowPage() {
     };
   }, []);
 
-  const loadMessages = useCallback(async (sessionId: string) => {
-    if (!sessionId) {
-      return;
-    }
+  const loadMessages = useCallback(
+    async (sessionId: string) => {
+      if (!sessionId) {
+        return;
+      }
 
-    try {
-      setIsLoadingMessages(true);
-      const result = await getSessionMessages(sessionId, {
-        limit: initialMessageLimit,
-      });
+      try {
+        setIsLoadingMessages(true);
+        const result = await getSessionMessages(sessionId, {
+          limit: initialMessageLimit,
+        });
 
-      setMessages(result.items);
-      setHasMoreMessages(Boolean(result.meta?.hasMore));
-      setOlderMessageCursor(result.meta?.beforeMessageId);
-    } catch (caughtError) {
-      showError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load message history",
-      );
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  }, [initialMessageLimit, showError]);
+        setMessages(result.items);
+        setHasMoreMessages(Boolean(result.meta?.hasMore));
+        setOlderMessageCursor(result.meta?.beforeMessageId);
+      } catch (caughtError) {
+        showError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Failed to load message history",
+        );
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    },
+    [initialMessageLimit, showError],
+  );
 
   const isNearBottom = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -225,8 +228,8 @@ export function AgentChatWindowPage() {
             return;
           }
 
-            const message = payload.message ?? "Failed to send message";
-            showError(message);
+          const message = payload.message ?? "Failed to send message";
+          showError(message);
         },
       );
       if (socket.connected) {
@@ -390,7 +393,10 @@ export function AgentChatWindowPage() {
     }
 
     // If initial batch does not overflow, fetch older chunks automatically.
-    if (hasMoreMessages && container.scrollHeight <= container.clientHeight + 2) {
+    if (
+      hasMoreMessages &&
+      container.scrollHeight <= container.clientHeight + 2
+    ) {
       shouldAutoScrollRef.current = false;
       void loadOlderMessages();
     }
@@ -471,8 +477,6 @@ export function AgentChatWindowPage() {
               </div>
             </div>
           </header>
-
-          
 
           <div
             className="agent-chat-thread"

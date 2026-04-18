@@ -25,11 +25,11 @@ export enum ExternalChannel {
   'priority',
 ])
 @Index('idx_channel_campaign_mappings_campaign_id', ['campaignId'])
-@Index('uq_channel_campaign_mappings_unique_link', [
-  'channel',
-  'externalAccountId',
-  'campaignId',
-], { unique: true })
+@Index(
+  'uq_channel_campaign_mappings_unique_link',
+  ['channel', 'externalAccountId', 'campaignId'],
+  { unique: true },
+)
 export class ChannelCampaignMapping {
   @PrimaryGeneratedColumn('uuid')
   id: string;

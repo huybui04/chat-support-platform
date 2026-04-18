@@ -164,7 +164,11 @@ export class WhatsappController {
     @Body() payload: Record<string, unknown>,
   ) {
     const parsedChannel = parseExternalChannel(channel);
-    this.whatsappService.verifyWebhookSignature(request, payload, parsedChannel);
+    this.whatsappService.verifyWebhookSignature(
+      request,
+      payload,
+      parsedChannel,
+    );
     const result = await this.whatsappService.handleInboundMessageByChannel(
       parsedChannel,
       payload,

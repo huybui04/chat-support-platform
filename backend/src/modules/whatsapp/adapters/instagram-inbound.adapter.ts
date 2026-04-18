@@ -13,9 +13,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 @Injectable()
-export class InstagramInboundAdapter
-  implements InboundProviderAdapter<unknown>
-{
+export class InstagramInboundAdapter implements InboundProviderAdapter<unknown> {
   readonly channel = ExternalChannel.INSTAGRAM;
 
   normalizeInboundMessages(payload: unknown): NormalizedInboundMessage[] {
@@ -165,7 +163,8 @@ export class InstagramInboundAdapter
       }
 
       const fileLabel =
-        typeof document.filename === 'string' && document.filename.trim().length > 0
+        typeof document.filename === 'string' &&
+        document.filename.trim().length > 0
           ? document.filename
           : 'document';
 

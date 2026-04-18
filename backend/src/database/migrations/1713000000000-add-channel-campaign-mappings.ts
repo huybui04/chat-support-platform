@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddChannelCampaignMappings1713000000000
-  implements MigrationInterface
-{
+export class AddChannelCampaignMappings1713000000000 implements MigrationInterface {
   name = 'AddChannelCampaignMappings1713000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
