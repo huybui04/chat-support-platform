@@ -67,6 +67,74 @@ export class InstagramInboundAdapter implements InboundProviderAdapter<unknown> 
           }
         }
       }
+
+      const messagingEvents = Array.isArray(entryRecord.messaging)
+        ? entryRecord.messaging
+        : [];
+
+      for (const event of messagingEvents) {
+        const eventRecord = asRecord(event);
+        if (!eventRecord) {
+          continue;
+        }
+
+        const sender = asRecord(eventRecord.sender);
+        const senderId = typeof sender?.id === 'string' ? sender.id : null;
+        if (!senderId) {
+          continue;
+        }
+
+        const message = asRecord(eventRecord.message);
+        if (!message) {
+          continue;
+        }
+
+        if (
+          typeof message.text === 'string' &&
+          message.text.trim().length > 0
+        ) {
+          normalized.push({
+            from: senderId,
+            message: message.text,
+            messageType: MessageType.TEXT,
+            attachmentUrl: null,
+          });
+          continue;
+        }
+
+        const attachments = Array.isArray(message.attachments)
+          ? message.attachments
+          : [];
+        const firstAttachment = asRecord(attachments[0]);
+        const attachmentType =
+          typeof firstAttachment?.type === 'string'
+            ? firstAttachment.type
+            : null;
+        const attachmentPayload = asRecord(firstAttachment?.payload);
+        const attachmentUrl =
+          attachmentPayload && typeof attachmentPayload.url === 'string'
+            ? attachmentPayload.url
+            : null;
+
+        if (attachmentType === 'image') {
+          normalized.push({
+            from: senderId,
+            message: '[image]',
+            messageType: MessageType.IMAGE,
+            attachmentUrl,
+          });
+          continue;
+        }
+
+        if (attachmentType) {
+          normalized.push({
+            from: senderId,
+            message: `[file] ${attachmentType}`,
+            messageType: MessageType.FILE,
+            attachmentUrl,
+          });
+        }
+      }
     }
 
     if (normalized.length === 0) {

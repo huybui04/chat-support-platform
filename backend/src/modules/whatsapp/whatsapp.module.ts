@@ -17,7 +17,10 @@ import { InstagramInboundAdapter } from './adapters/instagram-inbound.adapter';
 import { MessengerInboundAdapter } from './adapters/messenger-inbound.adapter';
 import { MetaInboundAdapterRegistry } from './adapters/meta-inbound-adapter.registry';
 import { WhatsappInboundAdapter } from './whatsapp-inbound.adapter';
-import { WhatsappController } from './whatsapp.controller';
+import {
+  MetaWebhookAliasController,
+  WhatsappController,
+} from './whatsapp.controller';
 import { WhatsappService } from './whatsapp.service';
 
 @Module({
@@ -35,7 +38,7 @@ import { WhatsappService } from './whatsapp.service';
     SessionsModule,
     ChatModule,
   ],
-  controllers: [WhatsappController],
+  controllers: [WhatsappController, MetaWebhookAliasController],
   providers: [
     WhatsappService,
     WhatsappInboundAdapter,
