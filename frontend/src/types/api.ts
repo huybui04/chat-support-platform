@@ -2,6 +2,8 @@ export type ApiMeta = {
   page?: number;
   limit?: number;
   total?: number;
+  hasMore?: boolean;
+  beforeMessageId?: string;
 };
 
 export type ApiResponse<T> = {

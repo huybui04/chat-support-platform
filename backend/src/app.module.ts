@@ -8,6 +8,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { getTypeOrmConfig } from './database/typeorm.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { ChannelMappingsModule } from './modules/channel-mappings/channel-mappings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -21,6 +22,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     TypeOrmModule.forRoot(getTypeOrmConfig()),
     AuthModule,
     CampaignsModule,
+    ChannelMappingsModule,
     UsersModule,
     TeamsModule,
     ContactsModule,

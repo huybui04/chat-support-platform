@@ -87,8 +87,14 @@ export class ReportsController {
 
       const rowIterator =
         query.kind === ReportsExportKind.CAMPAIGNS
-          ? this.reportsService.iterateCampaignExportRows(query.window)
-          : this.reportsService.iterateAgentExportRows(query.window);
+          ? this.reportsService.iterateCampaignExportRows(
+              query.window,
+              query.channel,
+            )
+          : this.reportsService.iterateAgentExportRows(
+              query.window,
+              query.channel,
+            );
 
       for await (const row of rowIterator) {
         response.write(this.reportsService.toCsvLine(row));

@@ -36,7 +36,19 @@ function shortId(value: string): string {
 }
 
 function formatChannel(channel: ChatSession["channel"]): string {
-  return channel === "whatsapp" ? "WhatsApp" : "Web";
+  if (channel === "whatsapp") {
+    return "WhatsApp";
+  }
+
+  if (channel === "instagram") {
+    return "Instagram";
+  }
+
+  if (channel === "messenger") {
+    return "Messenger";
+  }
+
+  return "Web";
 }
 
 export function AgentSessionListPage() {
@@ -446,6 +458,8 @@ export function AgentSessionListPage() {
           <option value="all">All channels</option>
           <option value="web">Web</option>
           <option value="whatsapp">WhatsApp</option>
+          <option value="instagram">Instagram</option>
+          <option value="messenger">Messenger</option>
         </select>
       </div>
 

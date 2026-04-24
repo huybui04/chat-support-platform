@@ -1,4 +1,5 @@
 export * from './campaign-agent.entity';
+export * from './channel-campaign-mapping.entity';
 export * from './campaign-contact.entity';
 export * from './campaign-team.entity';
 export * from './all-entities';

@@ -547,6 +547,8 @@ export function AdminCampaignsPage() {
           >
             <option value="web">web</option>
             <option value="whatsapp">whatsapp</option>
+            <option value="instagram">instagram</option>
+            <option value="messenger">messenger</option>
           </select>
           <input
             type="datetime-local"
@@ -853,6 +855,8 @@ export function AdminCampaignsPage() {
                       >
                         <option value="web">web</option>
                         <option value="whatsapp">whatsapp</option>
+                        <option value="instagram">instagram</option>
+                        <option value="messenger">messenger</option>
                       </select>
                     ) : (
                       campaign.channel

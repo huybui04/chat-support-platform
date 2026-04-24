@@ -26,6 +26,8 @@ export enum CampaignStatus {
 export enum CampaignChannel {
   WEB = 'web',
   WHATSAPP = 'whatsapp',
+  INSTAGRAM = 'instagram',
+  MESSENGER = 'messenger',
 }
 
 @Entity({ name: 'campaigns' })

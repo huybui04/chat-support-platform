@@ -195,11 +195,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('send_message')
-  async sendMessage(@MessageBody() payload: SendMessageDto) {
-    await this.validatePayload(payload, SendMessageDto);
+  async sendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: SendMessageDto,
+  ) {
+    try {
+      await this.validatePayload(payload, SendMessageDto);
 
-    const message = await this.chatService.saveIncomingMessage(payload);
-    this.server.to(payload.sessionId).emit('new_message', { message });
+      const message = await this.chatService.saveIncomingMessage(payload);
+      this.server.to(payload.sessionId).emit('new_message', { message });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to send message';
+      client.emit('message_error', {
+        sessionId: payload?.sessionId,
+        message,
+      });
+    }
   }
 
   @SubscribeMessage('typing_start')

@@ -20,6 +20,7 @@ export type ReportsExportFormat = "csv" | "json";
 
 type ReportsQuery = PaginationQuery & {
   window?: ReportsWindow;
+  channel?: Campaign["channel"];
 };
 
 type ExportReportsQuery = ReportsQuery & {
@@ -34,7 +35,7 @@ export type Campaign = {
   name: string;
   description: string | null;
   status: "draft" | "active" | "paused" | "completed";
-  channel: "web" | "whatsapp";
+  channel: "web" | "whatsapp" | "instagram" | "messenger";
   startDate: string | null;
   endDate: string | null;
   createdAt: string;
@@ -64,6 +65,19 @@ export type Contact = {
   phone: string | null;
   whatsappId: string | null;
   createdAt: string;
+};
+
+export type ExternalChannel = "whatsapp" | "instagram" | "messenger";
+
+export type ChannelMapping = {
+  id: string;
+  channel: ExternalChannel;
+  externalAccountId: string;
+  campaignId: string;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CreateCampaignPayload = {
@@ -120,9 +134,20 @@ export type CreateContactPayload = {
 
 export type UpdateContactPayload = Partial<CreateContactPayload>;
 
+export type CreateChannelMappingPayload = {
+  channel: ExternalChannel;
+  externalAccountId: string;
+  campaignId: string;
+  priority?: number;
+  isActive?: boolean;
+};
+
+export type UpdateChannelMappingPayload = Partial<CreateChannelMappingPayload>;
+
 export type CampaignReport = {
   campaignId: string;
   name: string;
+  channel: Campaign["channel"];
   totalContacts: number;
   sessions: {
     pending: number;
@@ -463,6 +488,57 @@ export async function getContacts(
   return { items: response.data, meta: response.meta };
 }
 
+export async function getChannelMappings(
+  query: PaginationQuery & {
+    channel?: ExternalChannel;
+    externalAccountId?: string;
+    campaignId?: string;
+    isActive?: boolean;
+    sortBy?: "createdAt" | "priority";
+    sortOrder?: "asc" | "desc";
+  } = {},
+): Promise<PaginatedResult<ChannelMapping>> {
+  const response = await apiRequest<ApiResponse<ChannelMapping[]>>(
+    `/channel-mappings${toQueryString(query)}`,
+  );
+  return { items: response.data, meta: response.meta };
+}
+
+export async function createChannelMapping(
+  payload: CreateChannelMappingPayload,
+) {
+  const response = await apiRequest<ApiResponse<ChannelMapping>>(
+    "/channel-mappings",
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+
+  return response.data;
+}
+
+export async function updateChannelMapping(
+  id: string,
+  payload: UpdateChannelMappingPayload,
+) {
+  const response = await apiRequest<ApiResponse<ChannelMapping>>(
+    `/channel-mappings/${id}`,
+    {
+      method: "PATCH",
+      body: payload,
+    },
+  );
+
+  return response.data;
+}
+
+export async function deleteChannelMapping(id: string) {
+  await apiRequest<ApiResponse<{ id: string }>>(`/channel-mappings/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function createContact(payload: CreateContactPayload) {
   const response = await apiRequest<ApiResponse<Contact>>("/contacts", {
     method: "POST",
@@ -514,7 +590,7 @@ export async function getCampaignReportDetail(
 }
 
 export async function getSessionsReport(
-  query: Pick<ReportsQuery, "window"> = {},
+  query: Pick<ReportsQuery, "window" | "channel"> = {},
 ): Promise<SessionsReport> {
   const response = await apiRequest<ApiResponse<SessionsReport>>(
     `/reports/sessions${toQueryString(query)}`,

@@ -13,6 +13,7 @@
 // } from '.';
 import { Campaign } from './campaign.entity';
 import { CampaignAgent } from './campaign-agent.entity';
+import { ChannelCampaignMapping } from './channel-campaign-mapping.entity';
 import { CampaignContact } from './campaign-contact.entity';
 import { CampaignTeam } from './campaign-team.entity';
 import { ChatMessage } from './chat-message.entity';
@@ -30,6 +31,7 @@ export const ALL_ENTITIES = [
   Campaign,
   CampaignTeam,
   CampaignAgent,
+  ChannelCampaignMapping,
   Contact,
   CampaignContact,
   ChatSession,

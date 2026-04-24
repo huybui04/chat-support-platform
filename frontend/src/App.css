@@ -368,6 +368,24 @@ button.inline-action {
   color: #991b1b;
 }
 
+.status-badge.channel-whatsapp {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.status-badge.channel-instagram {
+  background: #fce7f3;
+  border-color: #f9a8d4;
+  color: #9d174d;
+}
+
+.status-badge.channel-messenger {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
 .error-note {
   margin-top: 10px;
   color: #b91c1c;
@@ -744,6 +762,146 @@ button.inline-action {
   text-decoration: underline;
 }
 
+.channel-mapping-page {
+  display: grid;
+  gap: 12px;
+}
+
+.channel-mapping-hero {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: linear-gradient(120deg, #102a43 0%, #1f5f8b 55%, #2a9d8f 100%);
+  color: #ecfeff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.channel-mapping-hero h1 {
+  margin: 8px 0 0;
+  color: #f8fafc;
+}
+
+.channel-mapping-hero p {
+  margin-top: 8px;
+  color: #dbeafe;
+  max-width: 720px;
+}
+
+.channel-mapping-hero-meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.channel-mapping-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.channel-mapping-kpi-grid article {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.channel-mapping-kpi-grid h2 {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.channel-mapping-kpi-grid p {
+  margin: 8px 0 0;
+  font-size: 24px;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.channel-mapping-create {
+  margin-top: 0;
+}
+
+.channel-mapping-create .crud-form-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+}
+
+.channel-mapping-create .crud-form-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.channel-mapping-create .crud-form-grid input,
+.channel-mapping-create .crud-form-grid select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+}
+
+.channel-mapping-create .crud-form-grid .checkbox-field {
+  margin-bottom: 8px;
+}
+
+.channel-mapping-toolbar {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: 220px 180px 180px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.channel-mapping-toolbar label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.channel-mapping-toolbar select,
+.channel-mapping-toolbar input {
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+}
+
+.channel-mapping-search input {
+  width: 100%;
+}
+
+.channel-mapping-table-panel {
+  margin-top: 0;
+}
+
+.table-sort-button {
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.table-sort-button:hover {
+  color: #0f766e;
+}
+
 .chat-controls {
   margin-top: 14px;
   display: grid;
@@ -919,6 +1077,7 @@ button.inline-action {
   display: grid;
   grid-template-rows: auto minmax(320px, 1fr) auto;
   overflow: hidden;
+  min-height: 640px;
 }
 
 .agent-chat-thread-head {
@@ -964,6 +1123,8 @@ button.inline-action {
   overflow: auto;
   display: grid;
   gap: 8px;
+  min-height: 320px;
+  max-height: 62vh;
 }
 
 .agent-chat-bubble {
@@ -1315,6 +1476,7 @@ button.inline-action {
 
   .agent-chat-thread-card {
     grid-template-rows: auto minmax(280px, 1fr) auto;
+    min-height: 520px;
   }
 
   .agent-chat-bubble {
@@ -1325,10 +1487,35 @@ button.inline-action {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .channel-mapping-hero {
+    flex-direction: column;
+  }
+
+  .channel-mapping-hero-meta {
+    justify-items: start;
+  }
+
+  .channel-mapping-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .channel-mapping-create .crud-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .channel-mapping-toolbar {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
   .agent-session-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .channel-mapping-kpi-grid,
+  .channel-mapping-create .crud-form-grid {
     grid-template-columns: 1fr;
   }
 }

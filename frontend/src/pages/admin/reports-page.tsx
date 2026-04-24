@@ -64,6 +64,9 @@ export function AdminReportsPage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     searchParams.get("campaignId"),
   );
+  const [channelFilter, setChannelFilter] = useState<
+    "all" | CampaignReport["channel"]
+  >("all");
   const [overviewKeyword, setOverviewKeyword] = useState("");
   const [campaignDetail, setCampaignDetail] =
     useState<CampaignDetailReport | null>(null);
@@ -111,11 +114,13 @@ export function AdminReportsPage() {
             page: campaignsPage,
             limit: REPORTS_PAGE_SIZE,
             window: windowFilter,
+            channel: channelFilter === "all" ? undefined : channelFilter,
           }),
           getAgentsReport({
             page: agentsPage,
             limit: REPORTS_PAGE_SIZE,
             window: windowFilter,
+            channel: channelFilter === "all" ? undefined : channelFilter,
           }),
         ]);
 
@@ -150,7 +155,7 @@ export function AdminReportsPage() {
     return () => {
       mounted = false;
     };
-  }, [agentsPage, campaignsPage, windowFilter]);
+  }, [agentsPage, campaignsPage, channelFilter, windowFilter]);
 
   useEffect(() => {
     if (!token || queueEventTick === 0) {
@@ -165,11 +170,13 @@ export function AdminReportsPage() {
           page: campaignsPage,
           limit: REPORTS_PAGE_SIZE,
           window: windowFilter,
+          channel: channelFilter === "all" ? undefined : channelFilter,
         }),
         getAgentsReport({
           page: agentsPage,
           limit: REPORTS_PAGE_SIZE,
           window: windowFilter,
+          channel: channelFilter === "all" ? undefined : channelFilter,
         }),
       ])
         .then(([campaignsResult, agentsResult]) => {
@@ -194,7 +201,14 @@ export function AdminReportsPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [agentsPage, campaignsPage, queueEventTick, token, windowFilter]);
+  }, [
+    agentsPage,
+    campaignsPage,
+    channelFilter,
+    queueEventTick,
+    token,
+    windowFilter,
+  ]);
 
   useEffect(() => {
     if (!selectedCampaignId) {
@@ -249,6 +263,12 @@ export function AdminReportsPage() {
       await downloadReportsCsv({
         kind,
         window: windowFilter,
+        channel:
+          kind === "campaigns" || kind === "agents" || kind === "sessions"
+            ? channelFilter === "all"
+              ? undefined
+              : channelFilter
+            : undefined,
         campaignId:
           kind === "campaign-detail"
             ? (selectedCampaignId ?? undefined)
@@ -293,6 +313,24 @@ export function AdminReportsPage() {
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
             <option value="all">All time</option>
+          </select>
+        </label>
+        <label>
+          Channel
+          <select
+            value={channelFilter}
+            onChange={(event) => {
+              setCampaignsPage(1);
+              setChannelFilter(
+                event.target.value as "all" | CampaignReport["channel"],
+              );
+            }}
+          >
+            <option value="all">All channels</option>
+            <option value="web">Web</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="instagram">Instagram</option>
+            <option value="messenger">Messenger</option>
           </select>
         </label>
       </div>
@@ -390,6 +428,7 @@ export function AdminReportsPage() {
               <thead>
                 <tr>
                   <th>Campaign</th>
+                  <th>Channel</th>
                   <th>Contacts</th>
                   <th>Pending</th>
                   <th>Active</th>
@@ -400,7 +439,7 @@ export function AdminReportsPage() {
               <tbody>
                 {!loading && filteredCampaigns.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <p className="status-note">
                         No campaign matches current filter.
                       </p>
@@ -421,6 +460,7 @@ export function AdminReportsPage() {
                         {campaign.name}
                       </button>
                     </td>
+                    <td>{campaign.channel}</td>
                     <td>{campaign.totalContacts}</td>
                     <td>{campaign.sessions.pending}</td>
                     <td>{campaign.sessions.active}</td>

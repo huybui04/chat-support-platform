@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -15,6 +19,7 @@ import {
 import { ChatGateway } from '../chat/chat.gateway';
 import { AcceptSessionDto } from './dto/accept-session.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
+import { ListSessionMessagesQueryDto } from './dto/list-session-messages-query.dto';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 
 @Injectable()
@@ -206,13 +211,67 @@ export class SessionsService {
     return this.sessionsRepository.save(session);
   }
 
-  async listMessages(sessionId: string): Promise<ChatMessage[]> {
+  async listMessages(
+    sessionId: string,
+    query: ListSessionMessagesQueryDto,
+  ): Promise<{
+    items: ChatMessage[];
+    meta: { limit: number; hasMore: boolean; beforeMessageId?: string };
+  }> {
     await this.findById(sessionId);
 
-    return this.messagesRepository.find({
-      where: { sessionId },
-      order: { createdAt: 'ASC' },
-    });
+    const limit = query.limit ?? 20;
+    let cursorCreatedAt: Date | null = null;
+    let cursorId: string | null = null;
+
+    if (query.beforeMessageId) {
+      const cursorMessage = await this.messagesRepository.findOne({
+        where: { id: query.beforeMessageId, sessionId },
+        select: { id: true, createdAt: true },
+      });
+
+      if (!cursorMessage) {
+        throw new BadRequestException('Invalid beforeMessageId cursor');
+      }
+
+      cursorCreatedAt = cursorMessage.createdAt;
+      cursorId = cursorMessage.id;
+    }
+
+    const qb = this.messagesRepository
+      .createQueryBuilder('message')
+      .where('message.sessionId = :sessionId', { sessionId })
+      .orderBy('message.createdAt', 'DESC')
+      .addOrderBy('message.id', 'DESC')
+      .take(limit + 1);
+
+    if (cursorCreatedAt && cursorId) {
+      qb.andWhere(
+        '(message.createdAt < :cursorCreatedAt OR (message.createdAt = :cursorCreatedAt AND message.id < :cursorId))',
+        {
+          cursorCreatedAt,
+          cursorId,
+        },
+      );
+    }
+
+    const rows = await qb.getMany();
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    // Keep chronological order for UI rendering while paging newest-first.
+    const items = [...pageRows].reverse();
+    const nextBeforeMessageId =
+      hasMore && items.length > 0 ? items[0].id : undefined;
+
+    return {
+      items,
+      meta: {
+        limit,
+        hasMore,
+        beforeMessageId: nextBeforeMessageId,
+      },
+    };
   }
 
   private async resolveCampaignName(
