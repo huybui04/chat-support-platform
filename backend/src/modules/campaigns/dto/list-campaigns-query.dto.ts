@@ -1,6 +1,10 @@
 import { IsEnum, IsOptional, IsUUID } from 'class-validator';
 
-import { CampaignChannel, CampaignStatus } from '../../../database/entities';
+import {
+  CampaignChannel,
+  CampaignStatus,
+  CampaignType,
+} from '../../../database/entities';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class ListCampaignsQueryDto extends PaginationQueryDto {
@@ -11,6 +15,10 @@ export class ListCampaignsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(CampaignChannel)
   channel?: CampaignChannel;
+
+  @IsOptional()
+  @IsEnum(CampaignType)
+  type?: CampaignType;
 
   @IsOptional()
   @IsUUID()

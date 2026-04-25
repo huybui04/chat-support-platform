@@ -17,6 +17,7 @@ import {
   CampaignContact,
   CampaignContactStatus,
   CampaignStatus,
+  CampaignType,
   ChatMessage,
   ChatSession,
   ChatSessionStatus,
@@ -531,6 +532,10 @@ export class WhatsappService {
     }
 
     if (campaign.status !== CampaignStatus.ACTIVE) {
+      return false;
+    }
+
+    if (campaign.type !== CampaignType.INBOUND) {
       return false;
     }
 

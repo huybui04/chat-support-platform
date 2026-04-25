@@ -1,26 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { ConfirmDialog } from "../../components/common/confirm-dialog";
 import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
-import { RowActionButtons } from "../../components/common/row-action-buttons";
 import {
-  assignCampaignAgent,
-  assignCampaignTeam,
   createCampaign,
   deleteCampaign,
-  getAgents,
-  getCampaignAgents,
   getCampaigns,
-  getCampaignTeams,
   getCurrentUser,
-  getTeams,
-  removeCampaignAgent,
-  removeCampaignTeam,
-  type CampaignAgentAssignment,
-  type CampaignTeamAssignment,
-  type Team,
-  type User,
   updateCampaign,
   type Campaign,
 } from "../../services/admin-api";
@@ -35,22 +23,25 @@ type CampaignForm = {
   description: string;
   status: Campaign["status"];
   channel: Campaign["channel"];
+  type: Campaign["type"];
   startDate: string;
   endDate: string;
 };
 
-type CampaignManagementTab = "list" | "create" | "assign-agent" | "assign-team";
+type CampaignManagementTab = "list" | "create";
 
 const initialForm: CampaignForm = {
   name: "",
   description: "",
   status: "draft",
   channel: "web",
+  type: "outbound",
   startDate: "",
   endDate: "",
 };
 
 export function AdminCampaignsPage() {
+  const [searchParams] = useSearchParams();
   const { showError, showSuccess } = useToast();
   const [activeTab, setActiveTab] = useState<CampaignManagementTab>("list");
   const [items, setItems] = useState<Campaign[]>([]);
@@ -59,33 +50,42 @@ export function AdminCampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createForm, setCreateForm] = useState<CampaignForm>(initialForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CampaignForm>(initialForm);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(
+    null,
+  );
   const [campaignIdToDelete, setCampaignIdToDelete] = useState<string | null>(
     null,
   );
-  const [assignCampaignId, setAssignCampaignId] = useState("");
-  const [assignAgentId, setAssignAgentId] = useState("");
-  const [agents, setAgents] = useState<User[]>([]);
-  const [assignedAgents, setAssignedAgents] = useState<
-    CampaignAgentAssignment[]
-  >([]);
-  const [assignedAgentsLoading, setAssignedAgentsLoading] = useState(false);
-  const [removingAgentId, setRemovingAgentId] = useState("");
-  const [agentsLoading, setAgentsLoading] = useState(false);
-  const [assigningAgent, setAssigningAgent] = useState(false);
-  const [assignTeamCampaignId, setAssignTeamCampaignId] = useState("");
-  const [assignTeamId, setAssignTeamId] = useState("");
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [assignedTeams, setAssignedTeams] = useState<CampaignTeamAssignment[]>(
-    [],
-  );
-  const [assignedTeamsLoading, setAssignedTeamsLoading] = useState(false);
-  const [removingTeamId, setRemovingTeamId] = useState("");
-  const [teamsLoading, setTeamsLoading] = useState(false);
-  const [assigningTeam, setAssigningTeam] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | Campaign["type"]>("all");
+
   const { creating, savingId, deleting, runCreate, runSave, runDelete } =
     useCrudActions();
+
+  const inboundCount = useMemo(
+    () => items.filter((campaign) => campaign.type === "inbound").length,
+    [items],
+  );
+
+  const outboundCount = useMemo(
+    () => items.filter((campaign) => campaign.type === "outbound").length,
+    [items],
+  );
+
+  const filteredItems = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+
+    return items.filter((campaign) => {
+      const matchType = typeFilter === "all" || campaign.type === typeFilter;
+      const matchKeyword =
+        !keyword ||
+        campaign.name.toLowerCase().includes(keyword) ||
+        (campaign.description ?? "").toLowerCase().includes(keyword);
+
+      return matchType && matchKeyword;
+    });
+  }, [items, searchKeyword, typeFilter]);
 
   const loadCampaigns = useCallback(async () => {
     setLoading(true);
@@ -106,164 +106,15 @@ export function AdminCampaignsPage() {
   }, [page]);
 
   useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "list" || tab === "create") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     void loadCampaigns();
   }, [loadCampaigns]);
-
-  useEffect(() => {
-    if (!assignCampaignId && items.length > 0) {
-      setAssignCampaignId(items[0].id);
-    }
-  }, [assignCampaignId, items]);
-
-  useEffect(() => {
-    if (!assignTeamCampaignId && items.length > 0) {
-      setAssignTeamCampaignId(items[0].id);
-    }
-  }, [assignTeamCampaignId, items]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadAgents = async () => {
-      setAgentsLoading(true);
-      try {
-        const result = await getAgents({ page: 1, limit: 100 });
-        if (!cancelled) {
-          setAgents(result.items);
-          if (!assignAgentId && result.items.length > 0) {
-            setAssignAgentId(result.items[0].id);
-          }
-        }
-      } catch (caughtError) {
-        if (!cancelled) {
-          showError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Failed to load agents",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setAgentsLoading(false);
-        }
-      }
-    };
-
-    void loadAgents();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assignAgentId, showError]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTeams = async () => {
-      setTeamsLoading(true);
-      try {
-        const result = await getTeams({ page: 1, limit: 100 });
-        if (!cancelled) {
-          setTeams(result.items);
-          if (!assignTeamId && result.items.length > 0) {
-            setAssignTeamId(result.items[0].id);
-          }
-        }
-      } catch (caughtError) {
-        if (!cancelled) {
-          showError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Failed to load teams",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setTeamsLoading(false);
-        }
-      }
-    };
-
-    void loadTeams();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assignTeamId, showError]);
-
-  useEffect(() => {
-    if (!assignCampaignId) {
-      setAssignedAgents([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadAssignedAgents = async () => {
-      setAssignedAgentsLoading(true);
-      try {
-        const result = await getCampaignAgents(assignCampaignId);
-        if (!cancelled) {
-          setAssignedAgents(result);
-        }
-      } catch (caughtError) {
-        if (!cancelled) {
-          showError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Failed to load assigned agents",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setAssignedAgentsLoading(false);
-        }
-      }
-    };
-
-    void loadAssignedAgents();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assignCampaignId, showError]);
-
-  useEffect(() => {
-    if (!assignTeamCampaignId) {
-      setAssignedTeams([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadAssignedTeams = async () => {
-      setAssignedTeamsLoading(true);
-      try {
-        const result = await getCampaignTeams(assignTeamCampaignId);
-        if (!cancelled) {
-          setAssignedTeams(result);
-        }
-      } catch (caughtError) {
-        if (!cancelled) {
-          showError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Failed to load assigned teams",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setAssignedTeamsLoading(false);
-        }
-      }
-    };
-
-    void loadAssignedTeams();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assignTeamCampaignId, showError]);
 
   const handleCreate = async () => {
     if (!createForm.name.trim()) {
@@ -278,6 +129,7 @@ export function AdminCampaignsPage() {
         description: toOptionalText(createForm.description),
         status: createForm.status,
         channel: createForm.channel,
+        type: createForm.type,
         startDate: toOptionalIsoString(createForm.startDate),
         endDate: toOptionalIsoString(createForm.endDate),
         createdById: currentUser.id,
@@ -288,50 +140,7 @@ export function AdminCampaignsPage() {
       setCreateForm(initialForm);
       showSuccess("Campaign created successfully");
       await loadCampaigns();
-    }
-  };
-
-  const startEdit = (campaign: Campaign) => {
-    setEditingId(campaign.id);
-    setEditForm({
-      name: campaign.name,
-      description: campaign.description ?? "",
-      status: campaign.status,
-      channel: campaign.channel,
-      startDate: toDateTimeLocal(campaign.startDate),
-      endDate: toDateTimeLocal(campaign.endDate),
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm(initialForm);
-  };
-
-  const saveEdit = async (id: string) => {
-    if (!editForm.name.trim()) {
-      showError("Campaign name is required");
-      return;
-    }
-
-    const updated = await runSave(
-      id,
-      async () =>
-        updateCampaign(id, {
-          name: editForm.name.trim(),
-          description: toOptionalText(editForm.description),
-          status: editForm.status,
-          channel: editForm.channel,
-          startDate: toOptionalIsoString(editForm.startDate),
-          endDate: toOptionalIsoString(editForm.endDate),
-        }),
-      "Failed to update campaign",
-    );
-
-    if (updated) {
-      showSuccess("Campaign updated successfully");
-      cancelEdit();
-      await loadCampaigns();
+      setActiveTab("list");
     }
   };
 
@@ -352,111 +161,64 @@ export function AdminCampaignsPage() {
     }
   };
 
-  const assignAgentToCampaign = async () => {
-    if (!assignCampaignId) {
-      showError("Please select a campaign");
-      return;
-    }
-
-    if (!assignAgentId) {
-      showError("Please select an agent");
-      return;
-    }
-
-    setAssigningAgent(true);
-    try {
-      await assignCampaignAgent(assignCampaignId, assignAgentId);
-      const updated = await getCampaignAgents(assignCampaignId);
-      setAssignedAgents(updated);
-      showSuccess("Agent assigned to campaign successfully");
-    } catch (caughtError) {
-      showError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to assign agent to campaign",
-      );
-    } finally {
-      setAssigningAgent(false);
-    }
+  const startEditCampaign = (campaign: Campaign) => {
+    setEditingCampaignId(campaign.id);
+    setEditForm({
+      name: campaign.name,
+      description: campaign.description ?? "",
+      status: campaign.status,
+      channel: campaign.channel,
+      type: campaign.type,
+      startDate: toDateTimeLocal(campaign.startDate),
+      endDate: toDateTimeLocal(campaign.endDate),
+    });
   };
 
-  const assignTeamToCampaign = async () => {
-    if (!assignTeamCampaignId) {
-      showError("Please select a campaign");
+  const closeEditModal = () => {
+    setEditingCampaignId(null);
+    setEditForm(initialForm);
+  };
+
+  const saveEditedCampaign = async () => {
+    if (!editingCampaignId) {
       return;
     }
 
-    if (!assignTeamId) {
-      showError("Please select a team");
+    if (!editForm.name.trim()) {
+      showError("Campaign name is required");
       return;
     }
 
-    setAssigningTeam(true);
-    try {
-      await assignCampaignTeam(assignTeamCampaignId, assignTeamId);
-      const updated = await getCampaignTeams(assignTeamCampaignId);
-      setAssignedTeams(updated);
-      showSuccess("Team assigned to campaign successfully");
-    } catch (caughtError) {
-      showError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to assign team to campaign",
-      );
-    } finally {
-      setAssigningTeam(false);
-    }
-  };
+    const updated = await runSave(
+      editingCampaignId,
+      async () =>
+        updateCampaign(editingCampaignId, {
+          name: editForm.name.trim(),
+          description: toOptionalText(editForm.description),
+          status: editForm.status,
+          channel: editForm.channel,
+          type: editForm.type,
+          startDate: toOptionalIsoString(editForm.startDate),
+          endDate: toOptionalIsoString(editForm.endDate),
+        }),
+      "Failed to update campaign",
+    );
 
-  const unassignAgent = async (campaignId: string, agentId: string) => {
-    setRemovingAgentId(agentId);
-    try {
-      await removeCampaignAgent(campaignId, agentId);
-      const updated = await getCampaignAgents(campaignId);
-      setAssignedAgents(updated);
-      showSuccess("Agent removed from campaign");
-    } catch (caughtError) {
-      showError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to remove agent from campaign",
-      );
-    } finally {
-      setRemovingAgentId("");
-    }
-  };
-
-  const unassignTeam = async (campaignId: string, teamId: string) => {
-    setRemovingTeamId(teamId);
-    try {
-      await removeCampaignTeam(campaignId, teamId);
-      const updated = await getCampaignTeams(campaignId);
-      setAssignedTeams(updated);
-      showSuccess("Team removed from campaign");
-    } catch (caughtError) {
-      showError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to remove team from campaign",
-      );
-    } finally {
-      setRemovingTeamId("");
+    if (updated) {
+      showSuccess("Campaign updated successfully");
+      closeEditModal();
+      await loadCampaigns();
     }
   };
 
   return (
     <section className="placeholder-page">
       <h1>Campaign Management</h1>
-      <p className="status-note">
-        Manage campaigns by workflow: list, create, assign agents, and assign
-        teams.
-      </p>
-
-      <p className="status-note">
-        {meta?.total !== undefined ? `Total campaigns: ${meta.total}` : null}
-      </p>
-      {loading ? <p className="status-note">Loading campaigns...</p> : null}
-      {error ? <p className="error-note">{error}</p> : null}
+      {activeTab !== "list" ? (
+        <p className="status-note">
+          Manage campaigns by workflow: list and create.
+        </p>
+      ) : null}
 
       <div
         className="management-tabs"
@@ -476,20 +238,6 @@ export function AdminCampaignsPage() {
           onClick={() => setActiveTab("create")}
         >
           Create Campaign
-        </button>
-        <button
-          type="button"
-          className={`management-tab ${activeTab === "assign-agent" ? "active" : ""}`}
-          onClick={() => setActiveTab("assign-agent")}
-        >
-          Assign Agents
-        </button>
-        <button
-          type="button"
-          className={`management-tab ${activeTab === "assign-team" ? "active" : ""}`}
-          onClick={() => setActiveTab("assign-team")}
-        >
-          Assign Teams
         </button>
       </div>
 
@@ -550,6 +298,19 @@ export function AdminCampaignsPage() {
             <option value="instagram">instagram</option>
             <option value="messenger">messenger</option>
           </select>
+          <select
+            value={createForm.type}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({
+                ...prev,
+                type: event.target.value as Campaign["type"],
+              }))
+            }
+          >
+            <option value="outbound">outbound</option>
+            <option value="inbound">inbound</option>
+          </select>
           <input
             type="datetime-local"
             value={createForm.startDate}
@@ -575,343 +336,131 @@ export function AdminCampaignsPage() {
         </CrudFormCard>
       ) : null}
 
-      {activeTab === "assign-agent" ? (
-        <div className="crud-form">
-          <h2>Assign Agent To Campaign</h2>
-          <div className="crud-form-grid">
-            <select
-              value={assignCampaignId}
-              disabled={assigningAgent || items.length === 0}
-              onChange={(event) => setAssignCampaignId(event.target.value)}
-            >
-              {items.length === 0 ? (
-                <option value="">No campaign available on this page</option>
-              ) : null}
-              {items.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={assignAgentId}
-              disabled={assigningAgent || agentsLoading || agents.length === 0}
-              onChange={(event) => setAssignAgentId(event.target.value)}
-            >
-              {agents.length === 0 ? (
-                <option value="">No agent available</option>
-              ) : null}
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.fullName} ({agent.email})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="page-actions">
-            <button
-              type="button"
-              onClick={() => void assignAgentToCampaign()}
-              disabled={
-                assigningAgent ||
-                items.length === 0 ||
-                agents.length === 0 ||
-                agentsLoading
-              }
-            >
-              {assigningAgent ? "Assigning..." : "Assign Agent"}
-            </button>
-          </div>
-          <div className="data-panel">
-            <h2>Assigned Agents</h2>
-            {assignedAgentsLoading ? (
-              <p className="status-note">Loading assigned agents...</p>
-            ) : null}
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Email</th>
-                  <th>Assigned At</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {!assignedAgentsLoading && assignedAgents.length === 0 ? (
-                  <tr>
-                    <td colSpan={4}>
-                      <p className="status-note">No agents assigned.</p>
-                    </td>
-                  </tr>
-                ) : null}
-                {assignedAgents.map((assignment) => (
-                  <tr key={assignment.id}>
-                    <td>{assignment.agent?.fullName ?? assignment.agentId}</td>
-                    <td>{assignment.agent?.email ?? "-"}</td>
-                    <td>{new Date(assignment.assignedAt).toLocaleString()}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={removingAgentId === assignment.agentId}
-                        onClick={() =>
-                          void unassignAgent(
-                            assignment.campaignId,
-                            assignment.agentId,
-                          )
-                        }
-                      >
-                        {removingAgentId === assignment.agentId
-                          ? "Removing..."
-                          : "Unassign"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-
-      {activeTab === "assign-team" ? (
-        <div className="crud-form">
-          <h2>Assign Team To Campaign</h2>
-          <div className="crud-form-grid">
-            <select
-              value={assignTeamCampaignId}
-              disabled={assigningTeam || items.length === 0}
-              onChange={(event) => setAssignTeamCampaignId(event.target.value)}
-            >
-              {items.length === 0 ? (
-                <option value="">No campaign available on this page</option>
-              ) : null}
-              {items.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={assignTeamId}
-              disabled={assigningTeam || teamsLoading || teams.length === 0}
-              onChange={(event) => setAssignTeamId(event.target.value)}
-            >
-              {teams.length === 0 ? (
-                <option value="">No team available</option>
-              ) : null}
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="page-actions">
-            <button
-              type="button"
-              onClick={() => void assignTeamToCampaign()}
-              disabled={
-                assigningTeam ||
-                items.length === 0 ||
-                teams.length === 0 ||
-                teamsLoading
-              }
-            >
-              {assigningTeam ? "Assigning..." : "Assign Team"}
-            </button>
-          </div>
-          <div className="data-panel">
-            <h2>Assigned Teams</h2>
-            {assignedTeamsLoading ? (
-              <p className="status-note">Loading assigned teams...</p>
-            ) : null}
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Team</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {!assignedTeamsLoading && assignedTeams.length === 0 ? (
-                  <tr>
-                    <td colSpan={2}>
-                      <p className="status-note">No teams assigned.</p>
-                    </td>
-                  </tr>
-                ) : null}
-                {assignedTeams.map((assignment) => (
-                  <tr key={assignment.id}>
-                    <td>{assignment.team?.name ?? assignment.teamId}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={removingTeamId === assignment.teamId}
-                        onClick={() =>
-                          void unassignTeam(
-                            assignment.campaignId,
-                            assignment.teamId,
-                          )
-                        }
-                      >
-                        {removingTeamId === assignment.teamId
-                          ? "Removing..."
-                          : "Unassign"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-
       {activeTab === "list" ? (
-        <div className="data-panel">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th>Channel</th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((campaign) => (
-                <tr key={campaign.id}>
-                  <td>
-                    {editingId === campaign.id ? (
-                      <input
-                        value={editForm.name}
-                        disabled={savingId === campaign.id}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            name: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      campaign.name
-                    )}
-                  </td>
-                  <td>
-                    {editingId === campaign.id ? (
-                      <input
-                        value={editForm.description}
-                        disabled={savingId === campaign.id}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            description: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      (campaign.description ?? "-")
-                    )}
-                  </td>
-                  <td>
-                    {editingId === campaign.id ? (
-                      <select
-                        value={editForm.status}
-                        disabled={savingId === campaign.id}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            status: event.target.value as Campaign["status"],
-                          }))
-                        }
-                      >
-                        <option value="draft">draft</option>
-                        <option value="active">active</option>
-                        <option value="paused">paused</option>
-                        <option value="completed">completed</option>
-                      </select>
-                    ) : (
-                      campaign.status
-                    )}
-                  </td>
-                  <td>
-                    {editingId === campaign.id ? (
-                      <select
-                        value={editForm.channel}
-                        disabled={savingId === campaign.id}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            channel: event.target.value as Campaign["channel"],
-                          }))
-                        }
-                      >
-                        <option value="web">web</option>
-                        <option value="whatsapp">whatsapp</option>
-                        <option value="instagram">instagram</option>
-                        <option value="messenger">messenger</option>
-                      </select>
-                    ) : (
-                      campaign.channel
-                    )}
-                  </td>
-                  <td>
-                    {editingId === campaign.id ? (
-                      <input
-                        type="datetime-local"
-                        value={editForm.startDate}
-                        disabled={savingId === campaign.id}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            startDate: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      (campaign.startDate ?? "-")
-                    )}
-                  </td>
-                  <td>
-                    {editingId === campaign.id ? (
-                      <input
-                        type="datetime-local"
-                        value={editForm.endDate}
-                        disabled={savingId === campaign.id}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({
-                            ...prev,
-                            endDate: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      (campaign.endDate ?? "-")
-                    )}
-                  </td>
-                  <td>
-                    <RowActionButtons
-                      editing={editingId === campaign.id}
-                      saving={savingId === campaign.id}
-                      deletingDisabled={deleting}
-                      onSave={() => void saveEdit(campaign.id)}
-                      onCancel={cancelEdit}
-                      onEdit={() => startEdit(campaign)}
-                      onDelete={() => setCampaignIdToDelete(campaign.id)}
-                    />
-                  </td>
+        <>
+          <div className="campaign-overview">
+            <p className="campaign-breadcrumb">
+              All Campaigns
+              {typeFilter !== "all"
+                ? ` > ${typeFilter === "inbound" ? "Inbound Campaigns" : "Outbound Campaigns"}`
+                : ""}
+            </p>
+
+            <div className="campaign-type-cards">
+              <button
+                type="button"
+                className={`campaign-type-card ${
+                  typeFilter === "inbound" ? "active" : ""
+                }`}
+                onClick={() => setTypeFilter("inbound")}
+              >
+                <span>Inbound Campaign</span>
+                <strong>{inboundCount}</strong>
+              </button>
+              <button
+                type="button"
+                className={`campaign-type-card ${
+                  typeFilter === "outbound" ? "active" : ""
+                }`}
+                onClick={() => setTypeFilter("outbound")}
+              >
+                <span>Outbound Campaign</span>
+                <strong>{outboundCount}</strong>
+              </button>
+            </div>
+
+            <div className="campaign-list-toolbar">
+              <input
+                placeholder="Search Campaign..."
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+              />
+              <button type="button" onClick={() => setActiveTab("create")}>
+                Create New Campaign +
+              </button>
+            </div>
+          </div>
+
+          {loading ? <p className="status-note">Loading campaigns...</p> : null}
+          {error ? <p className="error-note">{error}</p> : null}
+
+          <div className="data-panel campaign-list-table-panel">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Campaign Name</th>
+                  <th>Channel Assigned</th>
+                  <th>Type</th>
+                  <th>State</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredItems.map((campaign) => (
+                  <tr key={campaign.id}>
+                    <td>
+                      <Link
+                        className="campaign-name-link"
+                        to={`/admin/campaigns/${campaign.id}`}
+                      >
+                        {campaign.name}
+                      </Link>
+                    </td>
+                    <td>
+                      <span
+                        className={`status-badge channel-${campaign.channel}`}
+                      >
+                        {campaign.channel}
+                      </span>
+                    </td>
+                    <td>{campaign.type}</td>
+                    <td>
+                      <span
+                        className={`status-badge ${
+                          campaign.status === "active" ? "connected" : "pending"
+                        }`}
+                      >
+                        {toStateLabel(campaign.status)}
+                      </span>
+                    </td>
+                    <td>{campaign.startDate ?? "-"}</td>
+                    <td>{campaign.endDate ?? "-"}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => startEditCampaign(campaign)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={deleting}
+                          onClick={() => setCampaignIdToDelete(campaign.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!loading && filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <p className="status-note">
+                        No campaigns found for current filter.
+                      </p>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : null}
 
       {activeTab === "list" ? (
@@ -919,7 +468,7 @@ export function AdminCampaignsPage() {
           page={page}
           limit={PAGE_SIZE}
           total={meta?.total}
-          currentCount={items.length}
+          currentCount={filteredItems.length}
           loading={loading}
           onPageChange={setPage}
         />
@@ -934,6 +483,117 @@ export function AdminCampaignsPage() {
         onCancel={() => setCampaignIdToDelete(null)}
         onConfirm={() => void removeCampaign()}
       />
+
+      {editingCampaignId ? (
+        <div className="confirm-overlay" role="dialog" aria-modal="true">
+          <div className="confirm-dialog campaign-edit-modal">
+            <h3>Edit Campaign</h3>
+            <div className="crud-form-grid">
+              <input
+                placeholder="Campaign name"
+                value={editForm.name}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({ ...prev, name: event.target.value }))
+                }
+              />
+              <input
+                placeholder="Description (optional)"
+                value={editForm.description}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
+              />
+              <select
+                value={editForm.status}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    status: event.target.value as Campaign["status"],
+                  }))
+                }
+              >
+                <option value="draft">draft</option>
+                <option value="active">active</option>
+                <option value="paused">paused</option>
+                <option value="completed">completed</option>
+              </select>
+              <select
+                value={editForm.channel}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    channel: event.target.value as Campaign["channel"],
+                  }))
+                }
+              >
+                <option value="web">web</option>
+                <option value="whatsapp">whatsapp</option>
+                <option value="instagram">instagram</option>
+                <option value="messenger">messenger</option>
+              </select>
+              <select
+                value={editForm.type}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    type: event.target.value as Campaign["type"],
+                  }))
+                }
+              >
+                <option value="outbound">outbound</option>
+                <option value="inbound">inbound</option>
+              </select>
+              <input
+                type="datetime-local"
+                value={editForm.startDate}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    startDate: event.target.value,
+                  }))
+                }
+              />
+              <input
+                type="datetime-local"
+                value={editForm.endDate}
+                disabled={savingId === editingCampaignId}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    endDate: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={closeEditModal}
+                disabled={savingId === editingCampaignId}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveEditedCampaign()}
+                disabled={savingId === editingCampaignId}
+              >
+                {savingId === editingCampaignId ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -951,14 +611,32 @@ function toOptionalIsoString(value: string) {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
+function toStateLabel(status: Campaign["status"]) {
+  if (status === "active") {
+    return "Started";
+  }
+
+  if (status === "completed") {
+    return "Completed";
+  }
+
+  if (status === "paused") {
+    return "Paused";
+  }
+
+  return "Draft";
+}
+
 function toDateTimeLocal(value: string | null) {
   if (!value) {
     return "";
   }
+
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
+
   const timezoneOffset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
 }

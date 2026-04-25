@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ConfirmDialog } from "../../components/common/confirm-dialog";
-// import { CrudFormCard } from "../../components/common/crud-form-card";
+import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
 import { RowActionButtons } from "../../components/common/row-action-buttons";
-import { StatusLegend } from "../../components/common/status-legend";
-import { useAuth } from "../../store/auth-context";
-import { useToast } from "../../store/toast-context";
-import { useCrudActions } from "../../store/use-crud-actions";
-import { useAdminPresence } from "../../store/use-admin-presence";
 import {
-  // createAgent,
+  createAgent,
+  createTeam,
   deleteAgent,
+  deleteTeam,
   getAgents,
+  getCurrentUser,
+  getTeams,
   updateAgent,
+  updateTeam,
+  type Team,
   type User,
 } from "../../services/admin-api";
+import { useAuth } from "../../store/auth-context";
+import { useAdminPresence } from "../../store/use-admin-presence";
+import { useToast } from "../../store/toast-context";
+import { useCrudActions } from "../../store/use-crud-actions";
 import type { ApiMeta } from "../../types/api";
 
 const PAGE_SIZE = 20;
+
+type Mode = "agents" | "teams";
 
 type AgentForm = {
   keycloakId: string;
@@ -27,126 +35,207 @@ type AgentForm = {
   isActive: boolean;
 };
 
-// const initialCreateForm: AgentForm = {
-//   keycloakId: "",
-//   fullName: "",
-//   email: "",
-//   isActive: true,
-// };
+type TeamForm = {
+  name: string;
+  description: string;
+};
 
-const initialEditForm: Omit<AgentForm, "keycloakId"> = {
+const initialCreateAgentForm: AgentForm = {
+  keycloakId: "",
   fullName: "",
   email: "",
   isActive: true,
 };
 
+const initialEditAgentForm = {
+  fullName: "",
+  email: "",
+  isActive: true,
+};
+
+const initialTeamForm: TeamForm = {
+  name: "",
+  description: "",
+};
+
 export function AdminAgentsPage() {
   const { token } = useAuth();
   const { showError, showSuccess } = useToast();
-  const { socketState, agentStatuses } = useAdminPresence(token);
-  const [items, setItems] = useState<User[]>([]);
-  const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
+  const { agentStatuses } = useAdminPresence(token);
+
+  const [mode, setMode] = useState<Mode>("agents");
+  const [keyword, setKeyword] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
   const [page, setPage] = useState(1);
+
+  const [agentItems, setAgentItems] = useState<User[]>([]);
+  const [teamItems, setTeamItems] = useState<Team[]>([]);
+  const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
+  const [agentsTotal, setAgentsTotal] = useState(0);
+  const [teamsTotal, setTeamsTotal] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"all" | "online" | "offline">("all");
-  // const [createForm, setCreateForm] = useState<AgentForm>(initialCreateForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState(initialEditForm);
-  const [agentIdToDelete, setAgentIdToDelete] = useState<string | null>(null);
-  // const { creating, savingId, deleting, runCreate, runSave, runDelete } =
-  //   useCrudActions();
-  const { savingId, deleting, runSave, runDelete } = useCrudActions();
 
-  const effectiveItems = useMemo(
+  const [createAgentForm, setCreateAgentForm] = useState<AgentForm>(
+    initialCreateAgentForm,
+  );
+  const [createTeamForm, setCreateTeamForm] =
+    useState<TeamForm>(initialTeamForm);
+
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [editAgentForm, setEditAgentForm] = useState(initialEditAgentForm);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editTeamForm, setEditTeamForm] = useState(initialTeamForm);
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: Mode;
+    id: string;
+  } | null>(null);
+
+  const { creating, savingId, deleting, runCreate, runSave, runDelete } =
+    useCrudActions();
+
+  const effectiveAgents = useMemo(
     () =>
-      items.map((item) => ({
+      agentItems.map((item) => ({
         ...item,
         isOnline: agentStatuses[item.id] ?? item.isOnline,
       })),
-    [agentStatuses, items],
+    [agentItems, agentStatuses],
   );
 
-  const filteredItems = useMemo(() => {
-    if (filter === "all") {
-      return effectiveItems;
+  const filteredAgents = useMemo(() => {
+    const normalized = keyword.trim().toLowerCase();
+    if (!normalized) {
+      return effectiveAgents;
     }
 
-    const expectOnline = filter === "online";
-    return effectiveItems.filter((item) => item.isOnline === expectOnline);
-  }, [effectiveItems, filter]);
+    return effectiveAgents.filter(
+      (agent) =>
+        agent.fullName.toLowerCase().includes(normalized) ||
+        agent.email.toLowerCase().includes(normalized),
+    );
+  }, [effectiveAgents, keyword]);
 
-  const onlineCount = useMemo(
-    () => effectiveItems.filter((item) => item.isOnline).length,
-    [effectiveItems],
-  );
+  const filteredTeams = useMemo(() => {
+    const normalized = keyword.trim().toLowerCase();
+    if (!normalized) {
+      return teamItems;
+    }
 
-  const loadAgents = useCallback(async () => {
+    return teamItems.filter(
+      (team) =>
+        team.name.toLowerCase().includes(normalized) ||
+        (team.description ?? "").toLowerCase().includes(normalized),
+    );
+  }, [keyword, teamItems]);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
-      const result = await getAgents({ page, limit: PAGE_SIZE });
-      setItems(result.items);
-      setMeta(result.meta);
+      const [agentCountResult, teamCountResult] = await Promise.all([
+        getAgents({ page: 1, limit: 1 }),
+        getTeams({ page: 1, limit: 1 }),
+      ]);
+
+      setAgentsTotal(
+        agentCountResult.meta?.total ?? agentCountResult.items.length,
+      );
+      setTeamsTotal(
+        teamCountResult.meta?.total ?? teamCountResult.items.length,
+      );
+
+      if (mode === "agents") {
+        const result = await getAgents({ page, limit: PAGE_SIZE });
+        setAgentItems(result.items);
+        setMeta(result.meta);
+      } else {
+        const result = await getTeams({ page, limit: PAGE_SIZE });
+        setTeamItems(result.items);
+        setMeta(result.meta);
+      }
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Failed to load agents",
+          : `Failed to load ${mode}`,
       );
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [mode, page]);
 
   useEffect(() => {
-    void loadAgents();
-  }, [loadAgents]);
+    void loadData();
+  }, [loadData]);
 
-  // const handleCreate = async () => {
-  //   if (!createForm.fullName.trim() || !createForm.email.trim()) {
-  //     showError("Full name and email are required");
-  //     return;
-  //   }
-  //   if (!createForm.keycloakId.trim()) {
-  //     showError("Keycloak ID is required");
-  //     return;
-  //   }
+  const handleCreateAgent = async () => {
+    if (!createAgentForm.fullName.trim() || !createAgentForm.email.trim()) {
+      showError("Full name and email are required");
+      return;
+    }
 
-  //   const created = await runCreate(
-  //     async () =>
-  //       createAgent({
-  //         keycloakId: createForm.keycloakId.trim(),
-  //         fullName: createForm.fullName.trim(),
-  //         email: createForm.email.trim(),
-  //         isActive: createForm.isActive,
-  //       }),
-  //     "Failed to create agent",
-  //   );
+    if (!createAgentForm.keycloakId.trim()) {
+      showError("Keycloak ID is required");
+      return;
+    }
 
-  //   if (created) {
-  //     setCreateForm(initialCreateForm);
-  //     showSuccess("Agent created successfully");
-  //     await loadAgents();
-  //   }
-  // };
+    const created = await runCreate(
+      async () =>
+        createAgent({
+          keycloakId: createAgentForm.keycloakId.trim(),
+          fullName: createAgentForm.fullName.trim(),
+          email: createAgentForm.email.trim(),
+          isActive: createAgentForm.isActive,
+        }),
+      "Failed to create agent",
+    );
 
-  const startEdit = (agent: User) => {
-    setEditingId(agent.id);
-    setEditForm({
+    if (created) {
+      setCreateAgentForm(initialCreateAgentForm);
+      showSuccess("Agent created successfully");
+      setShowCreate(false);
+      await loadData();
+    }
+  };
+
+  const handleCreateTeam = async () => {
+    if (!createTeamForm.name.trim()) {
+      showError("Team name is required");
+      return;
+    }
+
+    const created = await runCreate(async () => {
+      const currentUser = await getCurrentUser();
+      return createTeam({
+        name: createTeamForm.name.trim(),
+        description: toOptionalText(createTeamForm.description),
+        createdById: currentUser.id,
+      });
+    }, "Failed to create team");
+
+    if (created) {
+      setCreateTeamForm(initialTeamForm);
+      showSuccess("Team created successfully");
+      setShowCreate(false);
+      await loadData();
+    }
+  };
+
+  const startEditAgent = (agent: User) => {
+    setEditingAgentId(agent.id);
+    setEditAgentForm({
       fullName: agent.fullName,
       email: agent.email,
       isActive: agent.isActive,
     });
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm(initialEditForm);
-  };
-
-  const saveEdit = async (id: string) => {
-    if (!editForm.fullName.trim() || !editForm.email.trim()) {
+  const saveEditAgent = async (id: string) => {
+    if (!editAgentForm.fullName.trim() || !editAgentForm.email.trim()) {
       showError("Full name and email are required");
       return;
     }
@@ -155,180 +244,276 @@ export function AdminAgentsPage() {
       id,
       async () =>
         updateAgent(id, {
-          fullName: editForm.fullName.trim(),
-          email: editForm.email.trim(),
-          isActive: editForm.isActive,
+          fullName: editAgentForm.fullName.trim(),
+          email: editAgentForm.email.trim(),
+          isActive: editAgentForm.isActive,
         }),
       "Failed to update agent",
     );
 
     if (updated) {
-      cancelEdit();
+      setEditingAgentId(null);
       showSuccess("Agent updated successfully");
-      await loadAgents();
+      await loadData();
     }
   };
 
-  const removeAgent = async () => {
-    if (!agentIdToDelete) {
+  const startEditTeam = (team: Team) => {
+    setEditingTeamId(team.id);
+    setEditTeamForm({
+      name: team.name,
+      description: team.description ?? "",
+    });
+  };
+
+  const saveEditTeam = async (id: string) => {
+    if (!editTeamForm.name.trim()) {
+      showError("Team name is required");
+      return;
+    }
+
+    const updated = await runSave(
+      id,
+      async () =>
+        updateTeam(id, {
+          name: editTeamForm.name.trim(),
+          description: toOptionalText(editTeamForm.description),
+        }),
+      "Failed to update team",
+    );
+
+    if (updated) {
+      setEditingTeamId(null);
+      showSuccess("Team updated successfully");
+      await loadData();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
       return;
     }
 
     const deleted = await runDelete(
-      async () => deleteAgent(agentIdToDelete),
-      "Failed to remove agent",
+      async () => {
+        if (deleteTarget.type === "agents") {
+          await deleteAgent(deleteTarget.id);
+          return;
+        }
+
+        await deleteTeam(deleteTarget.id);
+      },
+      deleteTarget.type === "agents"
+        ? "Failed to remove agent"
+        : "Failed to remove team",
     );
 
     if (deleted !== undefined) {
-      showSuccess("Agent disabled successfully");
-      setAgentIdToDelete(null);
-      await loadAgents();
+      showSuccess(
+        deleteTarget.type === "agents"
+          ? "Agent disabled successfully"
+          : "Team deleted successfully",
+      );
+      setDeleteTarget(null);
+      await loadData();
     }
   };
 
   return (
-    <section className="placeholder-page">
-      <h1>Agent Management</h1>
+    <section className="placeholder-page agents-team-page">
+      <p className="campaign-breadcrumb">
+        Agents & Team {">"} {mode === "agents" ? "All Agents" : "All Team"}
+      </p>
 
-      <p className="status-note">
-        {meta?.total !== undefined ? `Total agents: ${meta.total}` : null}
-      </p>
-      <p className="status-note with-badges">
-        Realtime presence:
-        <span className={`status-badge ${socketState}`}>{socketState}</span>
-        <span>Online agents:</span>
-        <span className="status-badge online">{onlineCount}</span>
-      </p>
-      <StatusLegend
-        items={[
-          { key: "connected", label: "Connected" },
-          { key: "connecting", label: "Connecting" },
-          { key: "disconnected", label: "Disconnected" },
-          { key: "online", label: "Online" },
-          { key: "offline", label: "Offline" },
-        ]}
-      />
-      {loading ? <p className="status-note">Loading agents...</p> : null}
+      <div className="agents-team-topbar">
+        <div className="campaign-type-cards">
+          <button
+            type="button"
+            className={`campaign-type-card ${mode === "agents" ? "active" : ""}`}
+            onClick={() => {
+              setMode("agents");
+              setShowCreate(false);
+              setPage(1);
+            }}
+          >
+            <span>All Agents</span>
+            <strong>{agentsTotal}</strong>
+          </button>
+
+          <button
+            type="button"
+            className={`campaign-type-card ${mode === "teams" ? "active" : ""}`}
+            onClick={() => {
+              setMode("teams");
+              setShowCreate(false);
+              setPage(1);
+            }}
+          >
+            <span>All Team</span>
+            <strong>{teamsTotal}</strong>
+          </button>
+        </div>
+
+        <div className="campaign-list-toolbar">
+          <input
+            placeholder={
+              mode === "agents" ? "Search Agents..." : "Search Teams..."
+            }
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+          />
+          <button type="button" onClick={() => setShowCreate((prev) => !prev)}>
+            {mode === "agents" ? "Create New Agent +" : "Create New Team +"}
+          </button>
+        </div>
+      </div>
+
+      {loading ? <p className="status-note">Loading {mode}...</p> : null}
       {error ? <p className="error-note">{error}</p> : null}
 
-      {/* <CrudFormCard
-        title="Create Agent"
-        submitLabel="Create agent"
-        submittingLabel="Creating..."
-        submitting={creating}
-        onSubmit={() => void handleCreate()}
-      >
-        <input
-          placeholder="Keycloak ID"
-          value={createForm.keycloakId}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({
-              ...prev,
-              keycloakId: event.target.value,
-            }))
-          }
-        />
-        <input
-          placeholder="Full name"
-          value={createForm.fullName}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({
-              ...prev,
-              fullName: event.target.value,
-            }))
-          }
-        />
-        <input
-          placeholder="Email"
-          type="email"
-          value={createForm.email}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({ ...prev, email: event.target.value }))
-          }
-        />
-        <label className="checkbox-field">
+      {showCreate && mode === "agents" ? (
+        <CrudFormCard
+          title="Create Agent"
+          submitLabel="Create agent"
+          submittingLabel="Creating..."
+          submitting={creating}
+          onSubmit={() => void handleCreateAgent()}
+        >
           <input
-            type="checkbox"
-            checked={createForm.isActive}
+            placeholder="Keycloak ID"
+            value={createAgentForm.keycloakId}
             disabled={creating}
             onChange={(event) =>
-              setCreateForm((prev) => ({
+              setCreateAgentForm((prev) => ({
                 ...prev,
-                isActive: event.target.checked,
+                keycloakId: event.target.value,
               }))
             }
           />
-          Active
-        </label>
-      </CrudFormCard> */}
+          <input
+            placeholder="Full name"
+            value={createAgentForm.fullName}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateAgentForm((prev) => ({
+                ...prev,
+                fullName: event.target.value,
+              }))
+            }
+          />
+          <input
+            placeholder="Email"
+            type="email"
+            value={createAgentForm.email}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateAgentForm((prev) => ({
+                ...prev,
+                email: event.target.value,
+              }))
+            }
+          />
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={createAgentForm.isActive}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateAgentForm((prev) => ({
+                  ...prev,
+                  isActive: event.target.checked,
+                }))
+              }
+            />
+            Active
+          </label>
+        </CrudFormCard>
+      ) : null}
 
-      <div className="page-actions">
-        <button
-          type="button"
-          className={filter === "all" ? "" : "secondary"}
-          onClick={() => setFilter("all")}
+      {showCreate && mode === "teams" ? (
+        <CrudFormCard
+          title="Create Team"
+          submitLabel="Create team"
+          submittingLabel="Creating..."
+          submitting={creating}
+          onSubmit={() => void handleCreateTeam()}
         >
-          All
-        </button>
-        <button
-          type="button"
-          className={filter === "online" ? "" : "secondary"}
-          onClick={() => setFilter("online")}
-        >
-          Online
-        </button>
-        <button
-          type="button"
-          className={filter === "offline" ? "" : "secondary"}
-          onClick={() => setFilter("offline")}
-        >
-          Offline
-        </button>
-      </div>
+          <input
+            placeholder="Team name"
+            value={createTeamForm.name}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateTeamForm((prev) => ({
+                ...prev,
+                name: event.target.value,
+              }))
+            }
+          />
+          <input
+            placeholder="Description (optional)"
+            value={createTeamForm.description}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateTeamForm((prev) => ({
+                ...prev,
+                description: event.target.value,
+              }))
+            }
+          />
+        </CrudFormCard>
+      ) : null}
 
-      <div className="data-panel">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Online</th>
-              <th>Active</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredItems.map((agent) => {
-              const online = agent.isOnline;
-              return (
+      {mode === "agents" ? (
+        <div className="data-panel">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && filteredAgents.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <p className="status-note">No agents found.</p>
+                  </td>
+                </tr>
+              ) : null}
+
+              {filteredAgents.map((agent) => (
                 <tr key={agent.id}>
                   <td>
-                    {editingId === agent.id ? (
+                    {editingAgentId === agent.id ? (
                       <input
-                        value={editForm.fullName}
+                        value={editAgentForm.fullName}
                         disabled={savingId === agent.id}
                         onChange={(event) =>
-                          setEditForm((prev) => ({
+                          setEditAgentForm((prev) => ({
                             ...prev,
                             fullName: event.target.value,
                           }))
                         }
                       />
                     ) : (
-                      agent.fullName
+                      <Link
+                        className="campaign-name-link"
+                        to={`/admin/agents/${agent.id}`}
+                      >
+                        {agent.fullName}
+                      </Link>
                     )}
                   </td>
                   <td>
-                    {editingId === agent.id ? (
+                    {editingAgentId === agent.id ? (
                       <input
-                        type="email"
-                        value={editForm.email}
+                        value={editAgentForm.email}
                         disabled={savingId === agent.id}
                         onChange={(event) =>
-                          setEditForm((prev) => ({
+                          setEditAgentForm((prev) => ({
                             ...prev,
                             email: event.target.value,
                           }))
@@ -338,71 +523,147 @@ export function AdminAgentsPage() {
                       agent.email
                     )}
                   </td>
+                  <td>{agent.role}</td>
                   <td>
                     <span
-                      className={`status-badge ${online ? "online" : "offline"}`}
+                      className={`status-badge ${
+                        agent.isOnline ? "online" : "offline"
+                      }`}
                     >
-                      {online ? "online" : "offline"}
+                      {agent.isOnline ? "Online" : "Offline"}
                     </span>
                   </td>
                   <td>
-                    {editingId === agent.id ? (
-                      <label className="checkbox-field">
-                        <input
-                          type="checkbox"
-                          checked={editForm.isActive}
-                          disabled={savingId === agent.id}
-                          onChange={(event) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              isActive: event.target.checked,
-                            }))
-                          }
-                        />
-                        Active
-                      </label>
-                    ) : agent.isActive ? (
-                      "active"
-                    ) : (
-                      "disabled"
-                    )}
-                  </td>
-                  <td>
                     <RowActionButtons
-                      editing={editingId === agent.id}
+                      editing={editingAgentId === agent.id}
                       saving={savingId === agent.id}
                       deletingDisabled={deleting}
-                      onSave={() => void saveEdit(agent.id)}
-                      onCancel={cancelEdit}
-                      onEdit={() => startEdit(agent)}
-                      onDelete={() => setAgentIdToDelete(agent.id)}
+                      onSave={() => void saveEditAgent(agent.id)}
+                      onCancel={() => setEditingAgentId(null)}
+                      onEdit={() => startEditAgent(agent)}
+                      onDelete={() =>
+                        setDeleteTarget({ type: "agents", id: agent.id })
+                      }
                     />
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {mode === "teams" ? (
+        <div className="data-panel">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Created At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && filteredTeams.length === 0 ? (
+                <tr>
+                  <td colSpan={4}>
+                    <p className="status-note">No teams found.</p>
+                  </td>
+                </tr>
+              ) : null}
+
+              {filteredTeams.map((team) => (
+                <tr key={team.id}>
+                  <td>
+                    {editingTeamId === team.id ? (
+                      <input
+                        value={editTeamForm.name}
+                        disabled={savingId === team.id}
+                        onChange={(event) =>
+                          setEditTeamForm((prev) => ({
+                            ...prev,
+                            name: event.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      <Link
+                        className="campaign-name-link"
+                        to={`/admin/teams/${team.id}`}
+                      >
+                        {team.name}
+                      </Link>
+                    )}
+                  </td>
+                  <td>
+                    {editingTeamId === team.id ? (
+                      <input
+                        value={editTeamForm.description}
+                        disabled={savingId === team.id}
+                        onChange={(event) =>
+                          setEditTeamForm((prev) => ({
+                            ...prev,
+                            description: event.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      (team.description ?? "-")
+                    )}
+                  </td>
+                  <td>{new Date(team.createdAt).toLocaleString()}</td>
+                  <td>
+                    <RowActionButtons
+                      editing={editingTeamId === team.id}
+                      saving={savingId === team.id}
+                      deletingDisabled={deleting}
+                      onSave={() => void saveEditTeam(team.id)}
+                      onCancel={() => setEditingTeamId(null)}
+                      onEdit={() => startEditTeam(team)}
+                      onDelete={() =>
+                        setDeleteTarget({ type: "teams", id: team.id })
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       <PaginationControls
         page={page}
         limit={PAGE_SIZE}
         total={meta?.total}
-        currentCount={items.length}
+        currentCount={
+          mode === "agents" ? filteredAgents.length : filteredTeams.length
+        }
         loading={loading}
         onPageChange={setPage}
       />
 
       <ConfirmDialog
-        open={Boolean(agentIdToDelete)}
-        title="Disable agent"
-        message="This action will deactivate the selected agent account."
-        confirmLabel="Disable"
+        open={Boolean(deleteTarget)}
+        title={
+          deleteTarget?.type === "agents" ? "Disable agent" : "Delete team"
+        }
+        message={
+          deleteTarget?.type === "agents"
+            ? "This action will deactivate the selected agent account."
+            : "This action removes the selected team and cannot be undone."
+        }
+        confirmLabel={deleteTarget?.type === "agents" ? "Disable" : "Delete"}
         confirmLoading={deleting}
-        onCancel={() => setAgentIdToDelete(null)}
-        onConfirm={() => void removeAgent()}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void handleDelete()}
       />
     </section>
   );
+}
+
+function toOptionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }

@@ -36,6 +36,7 @@ export type Campaign = {
   description: string | null;
   status: "draft" | "active" | "paused" | "completed";
   channel: "web" | "whatsapp" | "instagram" | "messenger";
+  type: "inbound" | "outbound";
   startDate: string | null;
   endDate: string | null;
   createdAt: string;
@@ -56,6 +57,14 @@ export type Team = {
   name: string;
   description: string | null;
   createdAt: string;
+};
+
+export type TeamMember = {
+  id: string;
+  teamId: string;
+  userId: string;
+  joinedAt: string;
+  user?: User;
 };
 
 export type Contact = {
@@ -85,6 +94,7 @@ export type CreateCampaignPayload = {
   description?: string;
   status?: Campaign["status"];
   channel?: Campaign["channel"];
+  type?: Campaign["type"];
   startDate?: string;
   endDate?: string;
   createdById: string;
@@ -260,6 +270,11 @@ export async function createCampaign(payload: CreateCampaignPayload) {
   return response.data;
 }
 
+export async function getCampaign(id: string): Promise<Campaign> {
+  const response = await apiRequest<ApiResponse<Campaign>>(`/campaigns/${id}`);
+  return response.data;
+}
+
 export async function updateCampaign(
   id: string,
   payload: UpdateCampaignPayload,
@@ -401,6 +416,11 @@ export async function updateAgent(id: string, payload: UpdateAgentPayload) {
   return response.data;
 }
 
+export async function getUserById(id: string): Promise<User> {
+  const response = await apiRequest<ApiResponse<User>>(`/users/${id}`);
+  return response.data;
+}
+
 export async function deleteAgent(id: string) {
   const response = await apiRequest<ApiResponse<User>>(`/users/${id}`, {
     method: "DELETE",
@@ -455,6 +475,38 @@ export async function getTeams(
     `/teams${toQueryString(query)}`,
   );
   return { items: response.data, meta: response.meta };
+}
+
+export async function getTeamById(id: string): Promise<Team> {
+  const response = await apiRequest<ApiResponse<Team>>(`/teams/${id}`);
+  return response.data;
+}
+
+export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
+  const response = await apiRequest<ApiResponse<TeamMember[]>>(
+    `/teams/${teamId}/members`,
+  );
+  return response.data;
+}
+
+export async function addTeamMember(teamId: string, userId: string) {
+  const response = await apiRequest<ApiResponse<TeamMember>>(
+    `/teams/${teamId}/members`,
+    {
+      method: "POST",
+      body: { userId },
+    },
+  );
+  return response.data;
+}
+
+export async function removeTeamMember(teamId: string, userId: string) {
+  await apiRequest<ApiResponse<{ id: string; userId: string }>>(
+    `/teams/${teamId}/members/${userId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export async function createTeam(payload: CreateTeamPayload) {

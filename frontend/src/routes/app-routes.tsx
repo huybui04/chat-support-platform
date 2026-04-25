@@ -2,11 +2,13 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "../components/common/app-shell";
 import { AdminAgentsPage } from "../pages/admin/agents-page";
+import { AdminAgentDetailPage } from "../pages/admin/agent-detail-page";
 import { AdminCampaignsPage } from "../pages/admin/campaigns-page";
-import { AdminChannelMappingsPage } from "../pages/admin/channel-mappings-page";
+import { AdminCampaignDetailPage } from "../pages/admin/campaign-detail-page";
 import { AdminContactsPage } from "../pages/admin/contacts-page";
 import { AdminDashboardPage } from "../pages/admin/dashboard-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
+import { AdminTeamDetailPage } from "../pages/admin/team-detail-page";
 import { AdminTeamsPage } from "../pages/admin/teams-page";
 import { AgentChatWindowPage } from "../pages/agent/chat-window-page";
 import { AgentDashboardPage } from "../pages/agent/dashboard-page";
@@ -37,10 +39,18 @@ export function AppRoutes() {
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
           <Route
-            path="/admin/channel-mappings"
-            element={<AdminChannelMappingsPage />}
+            path="/admin/campaigns/:campaignId"
+            element={<AdminCampaignDetailPage />}
           />
           <Route path="/admin/agents" element={<AdminAgentsPage />} />
+          <Route
+            path="/admin/agents/:agentId"
+            element={<AdminAgentDetailPage />}
+          />
+          <Route
+            path="/admin/teams/:teamId"
+            element={<AdminTeamDetailPage />}
+          />
           <Route path="/admin/teams" element={<AdminTeamsPage />} />
           <Route path="/admin/contacts" element={<AdminContactsPage />} />
           <Route path="/admin/reports" element={<AdminReportsPage />} />

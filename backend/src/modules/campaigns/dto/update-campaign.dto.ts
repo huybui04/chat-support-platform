@@ -7,7 +7,11 @@ import {
   MaxLength,
 } from 'class-validator';
 
-import { CampaignChannel, CampaignStatus } from '../../../database/entities';
+import {
+  CampaignChannel,
+  CampaignStatus,
+  CampaignType,
+} from '../../../database/entities';
 
 export class UpdateCampaignDto {
   @IsOptional()
@@ -26,6 +30,10 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsEnum(CampaignChannel)
   channel?: CampaignChannel;
+
+  @IsOptional()
+  @IsEnum(CampaignType)
+  type?: CampaignType;
 
   @IsOptional()
   @IsDateString()

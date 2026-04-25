@@ -29,6 +29,18 @@ export class TeamsController {
     return apiSuccess(result.items, result.meta);
   }
 
+  @Get(':id')
+  async findById(@Param('id') id: string) {
+    const team = await this.teamsService.findById(id);
+    return apiSuccess(team);
+  }
+
+  @Get(':id/members')
+  async listMembers(@Param('id') id: string) {
+    const items = await this.teamsService.listMembers(id);
+    return apiSuccess(items);
+  }
+
   @Post()
   async create(@Body() payload: CreateTeamDto) {
     const team = await this.teamsService.create(payload);

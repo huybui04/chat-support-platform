@@ -6,6 +6,7 @@ import {
   Campaign,
   CampaignChannel,
   CampaignStatus,
+  CampaignType,
 } from '../entities/campaign.entity';
 import {
   CampaignContact,
@@ -160,6 +161,7 @@ async function seedHeavyData(): Promise<void> {
         description: `Load test campaign ${i + 1}`,
         status: getCampaignStatus(i),
         channel: i % 2 === 0 ? CampaignChannel.WEB : CampaignChannel.WHATSAPP,
+        type: i % 2 === 0 ? CampaignType.OUTBOUND : CampaignType.INBOUND,
         startDate: startDate.toISOString().slice(0, 10),
         endDate: endDate.toISOString().slice(0, 10),
         createdById: supervisor.id,

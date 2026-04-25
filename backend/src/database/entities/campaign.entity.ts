@@ -30,6 +30,11 @@ export enum CampaignChannel {
   MESSENGER = 'messenger',
 }
 
+export enum CampaignType {
+  INBOUND = 'inbound',
+  OUTBOUND = 'outbound',
+}
+
 @Entity({ name: 'campaigns' })
 export class Campaign {
   @PrimaryGeneratedColumn('uuid')
@@ -54,6 +59,13 @@ export class Campaign {
     default: CampaignChannel.WEB,
   })
   channel: CampaignChannel;
+
+  @Column({
+    type: 'enum',
+    enum: CampaignType,
+    default: CampaignType.OUTBOUND,
+  })
+  type: CampaignType;
 
   @Column({ name: 'start_date', type: 'date', nullable: true })
   startDate: string | null;

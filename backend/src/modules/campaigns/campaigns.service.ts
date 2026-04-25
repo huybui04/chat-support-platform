@@ -65,6 +65,10 @@ export class CampaignsService {
       where.channel = query.channel;
     }
 
+    if (query.type) {
+      where.type = query.type;
+    }
+
     if (query.createdById) {
       where.createdById = query.createdById;
     }
@@ -102,6 +106,7 @@ export class CampaignsService {
       description: payload.description ?? null,
       status: payload.status,
       channel: payload.channel,
+      type: payload.type,
       startDate: payload.startDate ?? null,
       endDate: payload.endDate ?? null,
       createdById: payload.createdById,

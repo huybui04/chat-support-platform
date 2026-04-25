@@ -101,6 +101,16 @@ export class TeamsService {
     return this.teamMembersRepository.save(member);
   }
 
+  async listMembers(teamId: string): Promise<TeamMember[]> {
+    await this.findById(teamId);
+
+    return this.teamMembersRepository.find({
+      where: { teamId },
+      relations: { user: true },
+      order: { joinedAt: 'DESC' },
+    });
+  }
+
   async removeMember(teamId: string, userId: string): Promise<void> {
     const member = await this.teamMembersRepository.findOne({
       where: { teamId, userId },

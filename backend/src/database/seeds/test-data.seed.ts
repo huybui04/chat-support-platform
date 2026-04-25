@@ -6,6 +6,7 @@ import {
   Campaign,
   CampaignChannel,
   CampaignStatus,
+  CampaignType,
 } from '../entities/campaign.entity';
 import {
   CampaignContact,
@@ -137,6 +138,7 @@ async function seed(): Promise<void> {
         description: 'Re-engage customers inactive for 30+ days',
         status: CampaignStatus.ACTIVE,
         channel: CampaignChannel.WEB,
+        type: CampaignType.OUTBOUND,
         startDate: '2026-04-01',
         endDate: '2026-05-31',
         createdById: supervisor.id,
@@ -146,6 +148,7 @@ async function seed(): Promise<void> {
         description: 'Upsell premium package through WhatsApp channel',
         status: CampaignStatus.PAUSED,
         channel: CampaignChannel.WHATSAPP,
+        type: CampaignType.INBOUND,
         startDate: '2026-03-15',
         endDate: '2026-06-15',
         createdById: supervisor.id,
