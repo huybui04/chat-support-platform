@@ -1,685 +1,585 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { ConfirmDialog } from "../../components/common/confirm-dialog";
-import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
-import { RowActionButtons } from "../../components/common/row-action-buttons";
 import {
-  createContact,
-  deleteContact,
-  getCampaignImportLogs,
-  getCampaigns,
-  getContacts,
-  importCampaignContactsCsv,
-  type Campaign,
-  type CampaignImportLog,
-  updateContact,
-  type Contact,
-  type ImportCsvMapping,
+  getSessionMessages,
+  type ChatMessage,
+} from "../../services/agent-api";
+import {
+  getInteractionHistory,
+  type InteractionSession,
 } from "../../services/admin-api";
-import { useToast } from "../../store/toast-context";
-import { useCrudActions } from "../../store/use-crud-actions";
 import type { ApiMeta } from "../../types/api";
 
 const PAGE_SIZE = 20;
 
-type ContactsTab = "list" | "import" | "create";
+const CHANNEL_OPTIONS: Array<InteractionSession["channel"]> = [
+  "web",
+  "whatsapp",
+  "instagram",
+  "messenger",
+];
 
-type ContactForm = {
-  fullName: string;
-  email: string;
-  phone: string;
-  whatsappId: string;
-};
-
-const initialForm: ContactForm = {
-  fullName: "",
-  email: "",
-  phone: "",
-  whatsappId: "",
-};
-
-const initialMappingForm: ImportCsvMapping = {
-  full_name: "full_name",
-  phone: "phone",
-  email: "email",
-};
+const STATUS_OPTIONS: Array<InteractionSession["status"]> = [
+  "pending",
+  "active",
+  "completed",
+  "abandoned",
+];
 
 export function AdminContactsPage() {
-  const { showError, showSuccess } = useToast();
-  const [activeTab, setActiveTab] = useState<ContactsTab>("list");
-  const [items, setItems] = useState<Contact[]>([]);
+  const [items, setItems] = useState<InteractionSession[]>([]);
   const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [createForm, setCreateForm] = useState<ContactForm>(initialForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<ContactForm>(initialForm);
-  const [contactIdToDelete, setContactIdToDelete] = useState<string | null>(
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [phoneKeyword, setPhoneKeyword] = useState("");
+  const [campaignKeyword, setCampaignKeyword] = useState("");
+  const [subjectKeyword, setSubjectKeyword] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [channelFilter, setChannelFilter] = useState<
+    InteractionSession["channel"] | "all"
+  >("all");
+  const [statusFilter, setStatusFilter] = useState<
+    InteractionSession["status"] | "all"
+  >("all");
+  const [viewingItem, setViewingItem] = useState<InteractionSession | null>(
     null,
   );
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [importCampaignId, setImportCampaignId] = useState("");
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [mappingForm, setMappingForm] =
-    useState<ImportCsvMapping>(initialMappingForm);
-  const [importingCsv, setImportingCsv] = useState(false);
-  const [importLogs, setImportLogs] = useState<CampaignImportLog[]>([]);
-  const [importLogsLoading, setImportLogsLoading] = useState(false);
-  const [importLogsError, setImportLogsError] = useState("");
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const { creating, savingId, deleting, runCreate, runSave, runDelete } =
-    useCrudActions();
-
-  const filteredItems = items.filter((contact) => {
-    const keyword = searchKeyword.trim().toLowerCase();
-    if (!keyword) {
-      return true;
-    }
-
-    return [
-      contact.fullName,
-      contact.email ?? "",
-      contact.phone ?? "",
-      contact.whatsappId ?? "",
-    ].some((value) => value.toLowerCase().includes(keyword));
-  });
-
-  const contactsWithEmail = items.filter((item) => Boolean(item.email)).length;
-  const contactsWithPhone = items.filter((item) => Boolean(item.phone)).length;
-
-  const loadContacts = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await getContacts({ page, limit: PAGE_SIZE });
-      setItems(result.items);
-      setMeta(result.meta);
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load contacts",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
-    void loadContacts();
-  }, [loadContacts]);
+    let mounted = true;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadCampaigns = async () => {
+    const run = async () => {
+      setLoading(true);
+      setError("");
       try {
-        const result = await getCampaigns({ page: 1, limit: 100 });
-        if (!cancelled) {
-          setCampaigns(result.items);
-          if (!importCampaignId && result.items.length > 0) {
-            setImportCampaignId(result.items[0].id);
-          }
-        }
-      } catch (caughtError) {
-        if (!cancelled) {
-          showError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Failed to load campaigns",
-          );
-        }
-      }
-    };
-
-    void loadCampaigns();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [importCampaignId, showError]);
-
-  useEffect(() => {
-    if (!importCampaignId) {
-      setImportLogs([]);
-      setImportLogsError("");
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadImportLogs = async () => {
-      setImportLogsLoading(true);
-      setImportLogsError("");
-      try {
-        const result = await getCampaignImportLogs(importCampaignId, {
-          page: 1,
-          limit: 10,
+        const result = await getInteractionHistory({
+          page,
+          limit: PAGE_SIZE,
+          status: statusFilter === "all" ? undefined : statusFilter,
         });
-        if (!cancelled) {
-          setImportLogs(result.items);
+
+        if (!mounted) {
+          return;
         }
+
+        setItems(result.items);
+        setMeta(result.meta);
+        setSelectedIds([]);
       } catch (caughtError) {
-        if (!cancelled) {
-          setImportLogsError(
-            caughtError instanceof Error
-              ? caughtError.message
-              : "Failed to load import logs",
-          );
+        if (!mounted) {
+          return;
         }
+
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Failed to load interaction history",
+        );
       } finally {
-        if (!cancelled) {
-          setImportLogsLoading(false);
+        if (mounted) {
+          setLoading(false);
         }
       }
     };
 
-    void loadImportLogs();
+    void run();
 
     return () => {
-      cancelled = true;
+      mounted = false;
     };
-  }, [importCampaignId]);
+  }, [page, statusFilter]);
 
-  const handleCreate = async () => {
-    if (!createForm.fullName.trim()) {
-      showError("Contact name is required");
+  useEffect(() => {
+    if (!viewingItem) {
+      setChatMessages([]);
+      setChatLoading(false);
+      setChatError("");
       return;
     }
 
-    const created = await runCreate(
-      async () =>
-        createContact({
-          fullName: createForm.fullName.trim(),
-          email: toOptionalText(createForm.email),
-          phone: toOptionalText(createForm.phone),
-          whatsappId: toOptionalText(createForm.whatsappId),
-        }),
-      "Failed to create contact",
-    );
+    let mounted = true;
 
-    if (created) {
-      setCreateForm(initialForm);
-      showSuccess("Contact created successfully");
-      await loadContacts();
+    const run = async () => {
+      setChatLoading(true);
+      setChatError("");
+      try {
+        const result = await getSessionMessages(viewingItem.id, { limit: 100 });
+        if (!mounted) {
+          return;
+        }
+
+        setChatMessages(result.items);
+      } catch (caughtError) {
+        if (!mounted) {
+          return;
+        }
+
+        setChatError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Failed to load chat history",
+        );
+      } finally {
+        if (mounted) {
+          setChatLoading(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      mounted = false;
+    };
+  }, [viewingItem]);
+
+  const filteredItems = useMemo(() => {
+    const phoneNeedle = phoneKeyword.trim().toLowerCase();
+    const campaignNeedle = campaignKeyword.trim().toLowerCase();
+    const subjectNeedle = subjectKeyword.trim().toLowerCase();
+
+    return items.filter((item) => {
+      if (channelFilter !== "all" && item.channel !== channelFilter) {
+        return false;
+      }
+
+      const contactText = `${item.contactName ?? ""} ${item.contactId}`.toLowerCase();
+      const campaignText = `${item.campaignName ?? ""}`.toLowerCase();
+      const agentText = `${item.agentName ?? ""}`.toLowerCase();
+
+      if (phoneNeedle && !contactText.includes(phoneNeedle)) {
+        return false;
+      }
+
+      if (campaignNeedle && !campaignText.includes(campaignNeedle)) {
+        return false;
+      }
+
+      if (subjectNeedle && !agentText.includes(subjectNeedle)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [campaignKeyword, channelFilter, items, phoneKeyword, subjectKeyword]);
+
+  const selectedAll =
+    filteredItems.length > 0 && selectedIds.length === filteredItems.length;
+
+  const toggleSelectAll = () => {
+    if (selectedAll) {
+      setSelectedIds([]);
+      return;
     }
+
+    setSelectedIds(filteredItems.map((item) => item.id));
   };
 
-  const startEdit = (contact: Contact) => {
-    setEditingId(contact.id);
-    setEditForm({
-      fullName: contact.fullName,
-      email: contact.email ?? "",
-      phone: contact.phone ?? "",
-      whatsappId: contact.whatsappId ?? "",
+  const toggleRow = (id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((value) => value !== id);
+      }
+
+      return [...prev, id];
     });
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm(initialForm);
-  };
-
-  const saveEdit = async (id: string) => {
-    if (!editForm.fullName.trim()) {
-      showError("Contact name is required");
+  const downloadCsv = () => {
+    if (filteredItems.length === 0) {
       return;
     }
 
-    const updated = await runSave(
-      id,
-      async () =>
-        updateContact(id, {
-          fullName: editForm.fullName.trim(),
-          email: toOptionalText(editForm.email),
-          phone: toOptionalText(editForm.phone),
-          whatsappId: toOptionalText(editForm.whatsappId),
-        }),
-      "Failed to update contact",
-    );
+    const headers = [
+      "id",
+      "channel",
+      "agent",
+      "contact",
+      "campaign",
+      "started_time",
+      "assigned_time",
+      "ended_time",
+      "handling_time",
+      "outcome",
+    ];
 
-    if (updated) {
-      cancelEdit();
-      showSuccess("Contact updated successfully");
-      await loadContacts();
-    }
-  };
+    const lines = filteredItems.map((item) => {
+      const started = formatDateTime(item.startedAt);
+      const ended = formatDateTime(item.endedAt);
 
-  const removeContact = async () => {
-    if (!contactIdToDelete) {
-      return;
-    }
+      return [
+        item.id,
+        item.channel,
+        item.agentName ?? "Unassigned",
+        item.contactName ?? item.contactId,
+        item.campaignName ?? "-",
+        started,
+        started,
+        ended,
+        formatHandlingTime(item.startedAt, item.endedAt),
+        toOutcomeLabel(item.status),
+      ]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(",");
+    });
 
-    const deleted = await runDelete(
-      async () => deleteContact(contactIdToDelete),
-      "Failed to delete contact",
-    );
-
-    if (deleted !== undefined) {
-      showSuccess("Contact deleted successfully");
-      setContactIdToDelete(null);
-      await loadContacts();
-    }
-  };
-
-  const importCsv = async () => {
-    if (!importCampaignId) {
-      showError("Please select a campaign");
-      return;
-    }
-    if (!importFile) {
-      showError("Please choose a CSV file to import");
-      return;
-    }
-    if (!mappingForm.full_name.trim()) {
-      showError("Please provide full_name column mapping");
-      return;
-    }
-
-    setImportingCsv(true);
-    try {
-      const result = await importCampaignContactsCsv(
-        importCampaignId,
-        importFile,
-        {
-          full_name: mappingForm.full_name.trim(),
-          phone: mappingForm.phone.trim(),
-          email: mappingForm.email.trim(),
-        },
-      );
-
-      showSuccess(
-        `Import completed. Success: ${result.summary.successRows}, Failed: ${result.summary.failedRows}`,
-      );
-      setImportFile(null);
-      const logs = await getCampaignImportLogs(importCampaignId, {
-        page: 1,
-        limit: 10,
-      });
-      setImportLogs(logs.items);
-      await loadContacts();
-    } catch (caughtError) {
-      showError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to import campaign contacts",
-      );
-    } finally {
-      setImportingCsv(false);
-    }
+    const csvContent = [headers.join(","), ...lines].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `interaction-history-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   };
 
   return (
-    <section className="placeholder-page">
-      <h1>Contacts</h1>
-      <p className="status-note">
-        Choose a workflow: browse contacts, import CSV, or create manually.
+    <section className="placeholder-page interaction-history-page">
+      <p className="interaction-breadcrumb">
+        Interaction History <span aria-hidden="true">›</span> All Interactions
       </p>
 
-      <p className="status-note">
-        {meta?.total !== undefined ? `Total contacts: ${meta.total}` : null}
-      </p>
-      {loading ? <p className="status-note">Loading contacts...</p> : null}
-      {error ? <p className="error-note">{error}</p> : null}
-
-      <div className="admin-kpi-grid">
-        <article>
-          <h3>Contacts (Current Page)</h3>
-          <p>{items.length}</p>
-        </article>
-        <article>
-          <h3>Has Email</h3>
-          <p>{contactsWithEmail}</p>
-        </article>
-        <article>
-          <h3>Has Phone</h3>
-          <p>{contactsWithPhone}</p>
-        </article>
-        <article>
-          <h3>Filtered Result</h3>
-          <p>{filteredItems.length}</p>
-        </article>
-      </div>
-
-      <div
-        className="management-tabs"
-        role="tablist"
-        aria-label="Contacts management sections"
-      >
-        <button
-          type="button"
-          className={`management-tab ${activeTab === "list" ? "active" : ""}`}
-          onClick={() => setActiveTab("list")}
-        >
-          Contact List
+      <div className="interaction-toolbar">
+        <button type="button" className="interaction-download-btn" onClick={downloadCsv}>
+          Download
         </button>
+
+        <input
+          className="interaction-search-input"
+          placeholder="Phone number/email address"
+          value={phoneKeyword}
+          onChange={(event) => setPhoneKeyword(event.target.value)}
+        />
+
+        <input
+          className="interaction-search-input"
+          placeholder="Email Subject"
+          value={subjectKeyword}
+          onChange={(event) => setSubjectKeyword(event.target.value)}
+        />
+
+        <input
+          className="interaction-search-input"
+          placeholder="Email Content"
+          value={campaignKeyword}
+          onChange={(event) => setCampaignKeyword(event.target.value)}
+        />
+
         <button
           type="button"
-          className={`management-tab ${activeTab === "import" ? "active" : ""}`}
-          onClick={() => setActiveTab("import")}
+          className="interaction-advanced-btn"
+          onClick={() => setShowAdvanced((prev) => !prev)}
         >
-          Import CSV
-        </button>
-        <button
-          type="button"
-          className={`management-tab ${activeTab === "create" ? "active" : ""}`}
-          onClick={() => setActiveTab("create")}
-        >
-          Create Manual
+          Advanced search
         </button>
       </div>
 
-      {activeTab === "import" ? (
-        <div className="crud-form">
-          <h2>Import Contacts CSV</h2>
-          <p className="status-note">
-            Import theo campaign, có mapping cột CSV ({"full_name"} là bắt
-            buộc).
-          </p>
-          <div className="crud-form-grid">
+      {showAdvanced ? (
+        <div className="interaction-advanced-panel">
+          <label>
+            Channel
             <select
-              value={importCampaignId}
-              disabled={importingCsv || campaigns.length === 0}
-              onChange={(event) => setImportCampaignId(event.target.value)}
+              value={channelFilter}
+              onChange={(event) =>
+                setChannelFilter(
+                  event.target.value as InteractionSession["channel"] | "all",
+                )
+              }
             >
-              {campaigns.length === 0 ? (
-                <option value="">No campaign available</option>
-              ) : null}
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.name}
+              <option value="all">All channels</option>
+              {CHANNEL_OPTIONS.map((channel) => (
+                <option key={channel} value={channel}>
+                  {channel}
                 </option>
               ))}
             </select>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={importingCsv}
-              onChange={(event) =>
-                setImportFile(event.target.files?.[0] ?? null)
-              }
-            />
-            <input
-              placeholder="full_name column"
-              value={mappingForm.full_name}
-              disabled={importingCsv}
-              onChange={(event) =>
-                setMappingForm((prev) => ({
-                  ...prev,
-                  full_name: event.target.value,
-                }))
-              }
-            />
-            <input
-              placeholder="phone column"
-              value={mappingForm.phone}
-              disabled={importingCsv}
-              onChange={(event) =>
-                setMappingForm((prev) => ({
-                  ...prev,
-                  phone: event.target.value,
-                }))
-              }
-            />
-            <input
-              placeholder="email column"
-              value={mappingForm.email}
-              disabled={importingCsv}
-              onChange={(event) =>
-                setMappingForm((prev) => ({
-                  ...prev,
-                  email: event.target.value,
-                }))
-              }
-            />
-          </div>
-          <div className="page-actions">
-            <button
-              type="button"
-              onClick={() => void importCsv()}
-              disabled={importingCsv || campaigns.length === 0}
-            >
-              {importingCsv ? "Importing..." : "Import CSV"}
-            </button>
-          </div>
+          </label>
 
-          <div className="data-panel">
-            <h2>Recent Import Logs</h2>
-            {importLogsLoading ? (
-              <p className="status-note">Loading import logs...</p>
-            ) : null}
-            {importLogsError ? (
-              <p className="error-note">{importLogsError}</p>
-            ) : null}
-            {!importLogsLoading &&
-            !importLogsError &&
-            importLogs.length === 0 ? (
-              <p className="status-note">
-                No import logs for selected campaign.
-              </p>
-            ) : null}
-            {importLogs.length > 0 ? (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>File</th>
-                    <th>Status</th>
-                    <th>Total</th>
-                    <th>Success</th>
-                    <th>Failed</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {importLogs.map((log) => (
-                    <tr key={log.id}>
-                      <td>{log.fileName}</td>
-                      <td>{log.status}</td>
-                      <td>{log.totalRows}</td>
-                      <td>{log.successRows}</td>
-                      <td>{log.failedRows}</td>
-                      <td>{new Date(log.createdAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-          </div>
+          <label>
+            Outcome
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(
+                  event.target.value as InteractionSession["status"] | "all",
+                )
+              }
+            >
+              <option value="all">All outcomes</option>
+              {STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {toOutcomeLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       ) : null}
 
-      {activeTab === "create" ? (
-        <CrudFormCard
-          title="Create Contact (Manual)"
-          submitLabel="Create contact"
-          submittingLabel="Creating..."
-          submitting={creating}
-          onSubmit={() => void handleCreate()}
-        >
-          <input
-            placeholder="Full name"
-            value={createForm.fullName}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                fullName: event.target.value,
-              }))
-            }
-          />
-          <input
-            placeholder="Email"
-            type="email"
-            value={createForm.email}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, email: event.target.value }))
-            }
-          />
-          <input
-            placeholder="Phone"
-            value={createForm.phone}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, phone: event.target.value }))
-            }
-          />
-          <input
-            placeholder="WhatsApp ID"
-            value={createForm.whatsappId}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                whatsappId: event.target.value,
-              }))
-            }
-          />
-        </CrudFormCard>
-      ) : null}
+      {loading ? <p className="status-note">Loading interactions...</p> : null}
+      {error ? <p className="error-note">{error}</p> : null}
 
-      {activeTab === "list" ? (
-        <>
-          <div className="list-toolbar">
-            <input
-              placeholder="Search by name, email, phone, WhatsApp ID"
-              value={searchKeyword}
-              onChange={(event) => setSearchKeyword(event.target.value)}
-            />
-          </div>
+      <div className="data-panel interaction-table-panel">
+        <table className="data-table interaction-table">
+          <thead>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  checked={selectedAll}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all interactions"
+                />
+              </th>
+              <th>ID</th>
+              <th>Channel</th>
+              <th>Agent Assigned</th>
+              <th>Phone Number</th>
+              <th>Campaign</th>
+              <th>Skills Tagged</th>
+              <th>Started Time</th>
+              <th>Assigned Time</th>
+              <th>Ended Time</th>
+              <th>Handling Time</th>
+              <th>Outcome</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && filteredItems.length === 0 ? (
+              <tr>
+                <td colSpan={13}>
+                  <p className="status-note">No interactions found.</p>
+                </td>
+              </tr>
+            ) : null}
 
-          <div className="data-panel">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>WhatsApp ID</th>
-                  <th>Actions</th>
+            {filteredItems.map((item) => {
+              const started = formatDateTime(item.startedAt);
+              const ended = formatDateTime(item.endedAt);
+
+              return (
+                <tr key={item.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={() => toggleRow(item.id)}
+                      aria-label={`Select interaction ${item.id}`}
+                    />
+                  </td>
+                  <td>
+                    <span className="interaction-cell" title={item.id}>
+                      {shortId(item.id)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status-badge channel-${item.channel}`}>
+                      {item.channel}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className="interaction-cell"
+                      title={item.agentName ?? "Unassigned"}
+                    >
+                      {item.agentName ?? "Unassigned"}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className="interaction-cell"
+                      title={item.contactName ?? "-"}
+                    >
+                      {item.contactName ?? "-"}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className="interaction-cell"
+                      title={item.campaignName ?? "-"}
+                    >
+                      {item.campaignName ?? "-"}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="interaction-cell" title="-">
+                      -
+                    </span>
+                  </td>
+                  <td>
+                    <span className="interaction-cell" title={started}>
+                      {started}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="interaction-cell" title={started}>
+                      {started}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="interaction-cell" title={ended}>
+                      {ended}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className="interaction-cell"
+                      title={formatHandlingTime(item.startedAt, item.endedAt)}
+                    >
+                      {formatHandlingTime(item.startedAt, item.endedAt)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status-badge ${item.status}`}>
+                      {toOutcomeLabel(item.status)}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary interaction-view-btn"
+                      onClick={() => setViewingItem(item)}
+                    >
+                      View
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {!loading && filteredItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <p className="status-note">
-                        No contacts match the current filter.
-                      </p>
-                    </td>
-                  </tr>
-                ) : null}
-                {filteredItems.map((contact) => (
-                  <tr key={contact.id}>
-                    <td>
-                      {editingId === contact.id ? (
-                        <input
-                          value={editForm.fullName}
-                          disabled={savingId === contact.id}
-                          onChange={(event) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              fullName: event.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        contact.fullName
-                      )}
-                    </td>
-                    <td>
-                      {editingId === contact.id ? (
-                        <input
-                          type="email"
-                          value={editForm.email}
-                          disabled={savingId === contact.id}
-                          onChange={(event) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              email: event.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        (contact.email ?? "-")
-                      )}
-                    </td>
-                    <td>
-                      {editingId === contact.id ? (
-                        <input
-                          value={editForm.phone}
-                          disabled={savingId === contact.id}
-                          onChange={(event) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              phone: event.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        (contact.phone ?? "-")
-                      )}
-                    </td>
-                    <td>
-                      {editingId === contact.id ? (
-                        <input
-                          value={editForm.whatsappId}
-                          disabled={savingId === contact.id}
-                          onChange={(event) =>
-                            setEditForm((prev) => ({
-                              ...prev,
-                              whatsappId: event.target.value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        (contact.whatsappId ?? "-")
-                      )}
-                    </td>
-                    <td>
-                      <RowActionButtons
-                        editing={editingId === contact.id}
-                        saving={savingId === contact.id}
-                        deletingDisabled={deleting}
-                        onSave={() => void saveEdit(contact.id)}
-                        onCancel={cancelEdit}
-                        onEdit={() => startEdit(contact)}
-                        onDelete={() => setContactIdToDelete(contact.id)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-          <PaginationControls
-            page={page}
-            limit={PAGE_SIZE}
-            total={meta?.total}
-            currentCount={items.length}
-            loading={loading}
-            onPageChange={setPage}
-          />
-        </>
-      ) : null}
-
-      <ConfirmDialog
-        open={Boolean(contactIdToDelete)}
-        title="Delete contact"
-        message="This action will remove the selected contact record."
-        confirmLabel="Delete"
-        confirmLoading={deleting}
-        onCancel={() => setContactIdToDelete(null)}
-        onConfirm={() => void removeContact()}
+      <PaginationControls
+        page={page}
+        limit={PAGE_SIZE}
+        total={meta?.total}
+        currentCount={items.length}
+        loading={loading}
+        onPageChange={setPage}
       />
+
+      {viewingItem ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Interaction detail"
+          onClick={() => setViewingItem(null)}
+        >
+          <div
+            className="confirm-dialog interaction-detail-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3>Chat History</h3>
+
+            <div className="interaction-chat-history">
+              <p className="status-note">
+                Session ID: <strong>{shortId(viewingItem.id)}</strong>
+              </p>
+
+              {chatLoading ? (
+                <p className="status-note">Loading chat history...</p>
+              ) : null}
+
+              {chatError ? <p className="error-note">{chatError}</p> : null}
+
+              {!chatLoading && !chatError && chatMessages.length === 0 ? (
+                <p className="status-note">No messages in this interaction.</p>
+              ) : null}
+
+              {!chatLoading && !chatError && chatMessages.length > 0 ? (
+                <div className="interaction-chat-thread">
+                  {chatMessages.map((message) => (
+                    <article
+                      key={message.id}
+                      className={`interaction-chat-bubble sender-${message.senderType}`}
+                    >
+                      <header>
+                        <strong>{toSenderLabel(message.senderType)}</strong>
+                        <span>{formatDateTime(message.createdAt)}</span>
+                      </header>
+                      <p>{message.content}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="confirm-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setViewingItem(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function toOptionalText(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
+function shortId(value: string) {
+  return value.slice(0, 8);
+}
+
+function toOutcomeLabel(status: InteractionSession["status"]) {
+  if (status === "pending") return "Pending";
+  if (status === "active") return "In progress";
+  if (status === "completed") return "Resolved";
+  return "Abandoned";
+}
+
+function formatDateTime(input: string | null) {
+  if (!input) {
+    return "-";
+  }
+
+  return new Date(input).toLocaleString();
+}
+
+function formatHandlingTime(startedAt: string | null, endedAt: string | null) {
+  if (!startedAt || !endedAt) {
+    return "-";
+  }
+
+  const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return "-";
+  }
+
+  const minutes = Math.floor(durationMs / 60000);
+  const seconds = Math.floor((durationMs % 60000) / 1000);
+
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainMinutes = minutes % 60;
+    return `${hours}h ${remainMinutes}m`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+function toSenderLabel(senderType: ChatMessage["senderType"]) {
+  if (senderType === "agent") {
+    return "Agent";
+  }
+
+  if (senderType === "customer") {
+    return "Customer";
+  }
+
+  return "System";
 }

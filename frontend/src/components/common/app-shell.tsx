@@ -37,7 +37,7 @@ const supervisorNav: NavSection[] = [
   },
   {
     label: "Interaction History",
-    items: [{ label: "Interaction History", to: "/admin/contacts" }],
+    items: [{ label: "All Interactions", to: "/admin/contacts" }],
   },
   {
     label: "Reports",

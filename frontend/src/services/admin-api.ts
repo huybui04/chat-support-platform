@@ -76,6 +76,21 @@ export type Contact = {
   createdAt: string;
 };
 
+export type InteractionSession = {
+  id: string;
+  campaignId: string;
+  campaignName?: string | null;
+  contactId: string;
+  contactName?: string | null;
+  agentId: string | null;
+  agentName?: string | null;
+  channel: "web" | "whatsapp" | "instagram" | "messenger";
+  status: "pending" | "active" | "completed" | "abandoned";
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+};
+
 export type ExternalChannel = "whatsapp" | "instagram" | "messenger";
 
 export type ChannelMapping = {
@@ -536,6 +551,19 @@ export async function getContacts(
 ): Promise<PaginatedResult<Contact>> {
   const response = await apiRequest<ApiResponse<Contact[]>>(
     `/contacts${toQueryString(query)}`,
+  );
+  return { items: response.data, meta: response.meta };
+}
+
+export async function getInteractionHistory(
+  query: PaginationQuery & {
+    status?: InteractionSession["status"];
+    campaignId?: string;
+    agentId?: string;
+  } = {},
+): Promise<PaginatedResult<InteractionSession>> {
+  const response = await apiRequest<ApiResponse<InteractionSession[]>>(
+    `/sessions${toQueryString(query)}`,
   );
   return { items: response.data, meta: response.meta };
 }
