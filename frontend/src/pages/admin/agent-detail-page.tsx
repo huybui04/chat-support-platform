@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
+  addTeamMember,
   assignCampaignAgent,
   getCampaignAgents,
   getCampaigns,
@@ -10,6 +11,7 @@ import {
   getUserById,
   removeCampaignAgent,
   removeTeamMember,
+  updateAgent,
   type Campaign,
   type Team,
   type User,
@@ -19,23 +21,40 @@ import { useToast } from "../../store/toast-context";
 const CAMPAIGNS_PAGE_SIZE = 50;
 const TEAMS_PAGE_SIZE = 50;
 
+type AgentProfileForm = {
+  fullName: string;
+  email: string;
+  role: User["role"];
+  isActive: boolean;
+};
+
 export function AdminAgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const { showError, showSuccess } = useToast();
 
   const [agent, setAgent] = useState<User | null>(null);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [assignedCampaigns, setAssignedCampaigns] = useState<Campaign[]>([]);
   const [assignedTeams, setAssignedTeams] = useState<Team[]>([]);
+  const [profileForm, setProfileForm] = useState<AgentProfileForm>({
+    fullName: "",
+    email: "",
+    role: "agent",
+    isActive: true,
+  });
 
   const [searchCampaign, setSearchCampaign] = useState("");
   const [searchTeam, setSearchTeam] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [assigningCampaign, setAssigningCampaign] = useState(false);
+  const [assigningTeam, setAssigningTeam] = useState(false);
   const [removingCampaignId, setRemovingCampaignId] = useState("");
   const [removingTeamId, setRemovingTeamId] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const loadDetail = useCallback(async () => {
     if (!agentId) {
@@ -110,12 +129,20 @@ export function AdminAgentDetailPage() {
       );
 
       setAgent(user);
+      setProfileForm({
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+      });
       setAllCampaigns(dedupedCampaigns);
+      setAllTeams(teams);
       setAssignedCampaigns(linkedCampaigns);
       setAssignedTeams(
         assignedTeamChecks.filter((team): team is Team => team !== null),
       );
       setSelectedCampaignId((prev) => prev || dedupedCampaigns[0]?.id || "");
+      setSelectedTeamId((prev) => prev || teams[0]?.id || "");
     } catch (error) {
       showError(
         error instanceof Error ? error.message : "Failed to load agent detail",
@@ -158,6 +185,14 @@ export function AdminAgentDetailPage() {
           !assignedCampaigns.some((assigned) => assigned.id === campaign.id),
       ),
     [allCampaigns, assignedCampaigns],
+  );
+
+  const availableTeams = useMemo(
+    () =>
+      allTeams.filter(
+        (team) => !assignedTeams.some((assigned) => assigned.id === team.id),
+      ),
+    [allTeams, assignedTeams],
   );
 
   const handleAssignCampaign = async () => {
@@ -217,6 +252,54 @@ export function AdminAgentDetailPage() {
     }
   };
 
+  const handleAssignTeam = async () => {
+    if (!agentId || !selectedTeamId) {
+      return;
+    }
+
+    setAssigningTeam(true);
+    try {
+      await addTeamMember(selectedTeamId, agentId);
+      showSuccess("Team assigned to agent");
+      await loadDetail();
+    } catch (error) {
+      showError(
+        error instanceof Error ? error.message : "Failed to assign team",
+      );
+    } finally {
+      setAssigningTeam(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!agentId) {
+      return;
+    }
+
+    if (!profileForm.fullName.trim() || !profileForm.email.trim()) {
+      showError("Full name and email are required");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await updateAgent(agentId, {
+        fullName: profileForm.fullName.trim(),
+        email: profileForm.email.trim(),
+        role: profileForm.role,
+        isActive: profileForm.isActive,
+      });
+      showSuccess("Agent updated successfully");
+      await loadDetail();
+    } catch (error) {
+      showError(
+        error instanceof Error ? error.message : "Failed to update agent",
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   if (!agentId) {
     return (
       <section className="placeholder-page">
@@ -256,20 +339,76 @@ export function AdminAgentDetailPage() {
             </label>
             <label>
               Full Name
-              <input value={agent?.fullName ?? ""} disabled />
+              <input
+                className="editable-field"
+                value={profileForm.fullName}
+                disabled={savingProfile}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    fullName: event.target.value,
+                  }))
+                }
+              />
             </label>
             <label>
               Email
-              <input value={agent?.email ?? ""} disabled />
+              <input
+                className="editable-field"
+                type="email"
+                value={profileForm.email}
+                disabled={savingProfile}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    email: event.target.value,
+                  }))
+                }
+              />
             </label>
             <label>
               User Role
-              <input value={agent?.role ?? ""} disabled />
+              <select
+                className="editable-field"
+                value={profileForm.role}
+                disabled={savingProfile}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    role: event.target.value as User["role"],
+                  }))
+                }
+              >
+                <option value="supervisor">supervisor</option>
+                <option value="agent">agent</option>
+              </select>
             </label>
             <label>
               Active
-              <input value={agent?.isActive ? "Yes" : "No"} disabled />
+              <select
+                className="editable-field"
+                value={profileForm.isActive ? "true" : "false"}
+                disabled={savingProfile}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    isActive: event.target.value === "true",
+                  }))
+                }
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
             </label>
+          </div>
+          <div className="campaign-detail-toolbar">
+            <button
+              type="button"
+              onClick={() => void handleSaveProfile()}
+              disabled={savingProfile}
+            >
+              {savingProfile ? "Saving..." : "Save Profile"}
+            </button>
           </div>
         </div>
 
@@ -350,6 +489,26 @@ export function AdminAgentDetailPage() {
           <div className="data-panel">
             <div className="campaign-detail-toolbar">
               <h3>Team Assigned</h3>
+              <div className="campaign-detail-toolbar-actions">
+                <select
+                  value={selectedTeamId}
+                  disabled={assigningTeam || availableTeams.length === 0}
+                  onChange={(event) => setSelectedTeamId(event.target.value)}
+                >
+                  {availableTeams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={assigningTeam || availableTeams.length === 0}
+                  onClick={() => void handleAssignTeam()}
+                >
+                  {assigningTeam ? "Assigning..." : "+"}
+                </button>
+              </div>
             </div>
             <div className="campaign-detail-toolbar agent-detail-sub-toolbar">
               <input

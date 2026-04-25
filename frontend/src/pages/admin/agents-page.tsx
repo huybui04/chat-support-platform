@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { ConfirmDialog } from "../../components/common/confirm-dialog";
 import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
-import { RowActionButtons } from "../../components/common/row-action-buttons";
 import {
   createAgent,
   createTeam,
@@ -13,8 +12,6 @@ import {
   getAgents,
   getCurrentUser,
   getTeams,
-  updateAgent,
-  updateTeam,
   type Team,
   type User,
 } from "../../services/admin-api";
@@ -42,12 +39,6 @@ type TeamForm = {
 
 const initialCreateAgentForm: AgentForm = {
   keycloakId: "",
-  fullName: "",
-  email: "",
-  isActive: true,
-};
-
-const initialEditAgentForm = {
   fullName: "",
   email: "",
   isActive: true,
@@ -83,18 +74,12 @@ export function AdminAgentsPage() {
   const [createTeamForm, setCreateTeamForm] =
     useState<TeamForm>(initialTeamForm);
 
-  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
-  const [editAgentForm, setEditAgentForm] = useState(initialEditAgentForm);
-  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
-  const [editTeamForm, setEditTeamForm] = useState(initialTeamForm);
-
   const [deleteTarget, setDeleteTarget] = useState<{
     type: Mode;
     id: string;
   } | null>(null);
 
-  const { creating, savingId, deleting, runCreate, runSave, runDelete } =
-    useCrudActions();
+  const { creating, deleting, runCreate, runDelete } = useCrudActions();
 
   const effectiveAgents = useMemo(
     () =>
@@ -221,70 +206,6 @@ export function AdminAgentsPage() {
       setCreateTeamForm(initialTeamForm);
       showSuccess("Team created successfully");
       setShowCreate(false);
-      await loadData();
-    }
-  };
-
-  const startEditAgent = (agent: User) => {
-    setEditingAgentId(agent.id);
-    setEditAgentForm({
-      fullName: agent.fullName,
-      email: agent.email,
-      isActive: agent.isActive,
-    });
-  };
-
-  const saveEditAgent = async (id: string) => {
-    if (!editAgentForm.fullName.trim() || !editAgentForm.email.trim()) {
-      showError("Full name and email are required");
-      return;
-    }
-
-    const updated = await runSave(
-      id,
-      async () =>
-        updateAgent(id, {
-          fullName: editAgentForm.fullName.trim(),
-          email: editAgentForm.email.trim(),
-          isActive: editAgentForm.isActive,
-        }),
-      "Failed to update agent",
-    );
-
-    if (updated) {
-      setEditingAgentId(null);
-      showSuccess("Agent updated successfully");
-      await loadData();
-    }
-  };
-
-  const startEditTeam = (team: Team) => {
-    setEditingTeamId(team.id);
-    setEditTeamForm({
-      name: team.name,
-      description: team.description ?? "",
-    });
-  };
-
-  const saveEditTeam = async (id: string) => {
-    if (!editTeamForm.name.trim()) {
-      showError("Team name is required");
-      return;
-    }
-
-    const updated = await runSave(
-      id,
-      async () =>
-        updateTeam(id, {
-          name: editTeamForm.name.trim(),
-          description: toOptionalText(editTeamForm.description),
-        }),
-      "Failed to update team",
-    );
-
-    if (updated) {
-      setEditingTeamId(null);
-      showSuccess("Team updated successfully");
       await loadData();
     }
   };
@@ -487,42 +408,14 @@ export function AdminAgentsPage() {
               {filteredAgents.map((agent) => (
                 <tr key={agent.id}>
                   <td>
-                    {editingAgentId === agent.id ? (
-                      <input
-                        value={editAgentForm.fullName}
-                        disabled={savingId === agent.id}
-                        onChange={(event) =>
-                          setEditAgentForm((prev) => ({
-                            ...prev,
-                            fullName: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      <Link
-                        className="campaign-name-link"
-                        to={`/admin/agents/${agent.id}`}
-                      >
-                        {agent.fullName}
-                      </Link>
-                    )}
+                    <Link
+                      className="campaign-name-link"
+                      to={`/admin/agents/${agent.id}`}
+                    >
+                      {agent.fullName}
+                    </Link>
                   </td>
-                  <td>
-                    {editingAgentId === agent.id ? (
-                      <input
-                        value={editAgentForm.email}
-                        disabled={savingId === agent.id}
-                        onChange={(event) =>
-                          setEditAgentForm((prev) => ({
-                            ...prev,
-                            email: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      agent.email
-                    )}
-                  </td>
+                  <td>{agent.email}</td>
                   <td>{agent.role}</td>
                   <td>
                     <span
@@ -534,17 +427,16 @@ export function AdminAgentsPage() {
                     </span>
                   </td>
                   <td>
-                    <RowActionButtons
-                      editing={editingAgentId === agent.id}
-                      saving={savingId === agent.id}
-                      deletingDisabled={deleting}
-                      onSave={() => void saveEditAgent(agent.id)}
-                      onCancel={() => setEditingAgentId(null)}
-                      onEdit={() => startEditAgent(agent)}
-                      onDelete={() =>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={deleting}
+                      onClick={() =>
                         setDeleteTarget({ type: "agents", id: agent.id })
                       }
-                    />
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -576,55 +468,26 @@ export function AdminAgentsPage() {
               {filteredTeams.map((team) => (
                 <tr key={team.id}>
                   <td>
-                    {editingTeamId === team.id ? (
-                      <input
-                        value={editTeamForm.name}
-                        disabled={savingId === team.id}
-                        onChange={(event) =>
-                          setEditTeamForm((prev) => ({
-                            ...prev,
-                            name: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      <Link
-                        className="campaign-name-link"
-                        to={`/admin/teams/${team.id}`}
-                      >
-                        {team.name}
-                      </Link>
-                    )}
+                    <Link
+                      className="campaign-name-link"
+                      to={`/admin/teams/${team.id}`}
+                    >
+                      {team.name}
+                    </Link>
                   </td>
-                  <td>
-                    {editingTeamId === team.id ? (
-                      <input
-                        value={editTeamForm.description}
-                        disabled={savingId === team.id}
-                        onChange={(event) =>
-                          setEditTeamForm((prev) => ({
-                            ...prev,
-                            description: event.target.value,
-                          }))
-                        }
-                      />
-                    ) : (
-                      (team.description ?? "-")
-                    )}
-                  </td>
+                  <td>{team.description ?? "-"}</td>
                   <td>{new Date(team.createdAt).toLocaleString()}</td>
                   <td>
-                    <RowActionButtons
-                      editing={editingTeamId === team.id}
-                      saving={savingId === team.id}
-                      deletingDisabled={deleting}
-                      onSave={() => void saveEditTeam(team.id)}
-                      onCancel={() => setEditingTeamId(null)}
-                      onEdit={() => startEditTeam(team)}
-                      onDelete={() =>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={deleting}
+                      onClick={() =>
                         setDeleteTarget({ type: "teams", id: team.id })
                       }
-                    />
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -11,6 +11,7 @@ import {
   getTeamMembers,
   removeCampaignTeam,
   removeTeamMember,
+  updateTeam,
   type Campaign,
   type Team,
   type TeamMember,
@@ -18,7 +19,13 @@ import {
 } from "../../services/admin-api";
 import { useToast } from "../../store/toast-context";
 
-const PAGE_SIZE = 50;
+const CAMPAIGNS_PAGE_SIZE = 50;
+const AGENTS_PAGE_SIZE = 50;
+
+type TeamProfileForm = {
+  name: string;
+  description: string;
+};
 
 export function AdminTeamDetailPage() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -29,6 +36,10 @@ export function AdminTeamDetailPage() {
   const [assignedCampaigns, setAssignedCampaigns] = useState<Campaign[]>([]);
   const [assignedUsers, setAssignedUsers] = useState<TeamMember[]>([]);
   const [agentOptions, setAgentOptions] = useState<User[]>([]);
+  const [teamForm, setTeamForm] = useState<TeamProfileForm>({
+    name: "",
+    description: "",
+  });
 
   const [campaignKeyword, setCampaignKeyword] = useState("");
   const [userKeyword, setUserKeyword] = useState("");
@@ -41,6 +52,7 @@ export function AdminTeamDetailPage() {
   const [assigningUser, setAssigningUser] = useState(false);
   const [removingCampaignId, setRemovingCampaignId] = useState("");
   const [removingUserId, setRemovingUserId] = useState("");
+  const [savingTeam, setSavingTeam] = useState(false);
 
   const loadAllCampaigns = useCallback(async () => {
     const merged: Campaign[] = [];
@@ -48,7 +60,26 @@ export function AdminTeamDetailPage() {
     let total = Number.MAX_SAFE_INTEGER;
 
     while (merged.length < total) {
-      const result = await getCampaigns({ page, limit: PAGE_SIZE });
+      const result = await getCampaigns({ page, limit: CAMPAIGNS_PAGE_SIZE });
+      if (result.items.length === 0) {
+        break;
+      }
+
+      merged.push(...result.items);
+      total = result.meta?.total ?? merged.length;
+      page += 1;
+    }
+
+    return Array.from(new Map(merged.map((item) => [item.id, item])).values());
+  }, []);
+
+  const loadAllAgents = useCallback(async () => {
+    const merged: User[] = [];
+    let page = 1;
+    let total = Number.MAX_SAFE_INTEGER;
+
+    while (merged.length < total) {
+      const result = await getAgents({ page, limit: AGENTS_PAGE_SIZE });
       if (result.items.length === 0) {
         break;
       }
@@ -68,10 +99,10 @@ export function AdminTeamDetailPage() {
 
     setLoading(true);
     try {
-      const [teamDetail, campaigns, usersPage] = await Promise.all([
+      const [teamDetail, campaigns, agents] = await Promise.all([
         getTeamById(teamId),
         loadAllCampaigns(),
-        getAgents({ page: 1, limit: 200 }),
+        loadAllAgents(),
       ]);
 
       const assignedCampaignChecks = await Promise.all(
@@ -85,6 +116,10 @@ export function AdminTeamDetailPage() {
       const teamMembers = await getTeamMembers(teamId);
 
       setTeam(teamDetail);
+      setTeamForm({
+        name: teamDetail.name,
+        description: teamDetail.description ?? "",
+      });
       setAllCampaigns(campaigns);
       setAssignedCampaigns(
         assignedCampaignChecks.filter(
@@ -92,9 +127,9 @@ export function AdminTeamDetailPage() {
         ),
       );
       setAssignedUsers(teamMembers);
-      setAgentOptions(usersPage.items);
+      setAgentOptions(agents);
       setSelectedCampaignId((prev) => prev || campaigns[0]?.id || "");
-      setSelectedUserId((prev) => prev || usersPage.items[0]?.id || "");
+      setSelectedUserId((prev) => prev || agents[0]?.id || "");
     } catch (error) {
       showError(
         error instanceof Error ? error.message : "Failed to load team detail",
@@ -102,7 +137,7 @@ export function AdminTeamDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [loadAllCampaigns, showError, teamId]);
+  }, [loadAllAgents, loadAllCampaigns, showError, teamId]);
 
   useEffect(() => {
     void loadDetail();
@@ -223,6 +258,33 @@ export function AdminTeamDetailPage() {
     }
   };
 
+  const handleSaveTeam = async () => {
+    if (!teamId) {
+      return;
+    }
+
+    if (!teamForm.name.trim()) {
+      showError("Team name is required");
+      return;
+    }
+
+    setSavingTeam(true);
+    try {
+      await updateTeam(teamId, {
+        name: teamForm.name.trim(),
+        description: toOptionalText(teamForm.description),
+      });
+      showSuccess("Team updated successfully");
+      await loadDetail();
+    } catch (error) {
+      showError(
+        error instanceof Error ? error.message : "Failed to update team",
+      );
+    } finally {
+      setSavingTeam(false);
+    }
+  };
+
   if (!teamId) {
     return (
       <section className="placeholder-page">
@@ -249,8 +311,41 @@ export function AdminTeamDetailPage() {
             <div className="agent-detail-grid">
               <label>
                 Team Name*
-                <input value={team?.name ?? ""} disabled />
+                <input
+                  className="editable-field"
+                  value={teamForm.name}
+                  disabled={savingTeam}
+                  onChange={(event) =>
+                    setTeamForm((prev) => ({
+                      ...prev,
+                      name: event.target.value,
+                    }))
+                  }
+                />
               </label>
+              <label>
+                Description
+                <input
+                  className="editable-field"
+                  value={teamForm.description}
+                  disabled={savingTeam}
+                  onChange={(event) =>
+                    setTeamForm((prev) => ({
+                      ...prev,
+                      description: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <div className="campaign-detail-toolbar">
+              <button
+                type="button"
+                onClick={() => void handleSaveTeam()}
+                disabled={savingTeam}
+              >
+                {savingTeam ? "Saving..." : "Save Team"}
+              </button>
             </div>
           </div>
 
@@ -280,7 +375,7 @@ export function AdminTeamDetailPage() {
                     assigningCampaign || availableCampaigns.length === 0
                   }
                 >
-                  {assigningCampaign ? "..." : "+"}
+                  {assigningCampaign ? "Assigning..." : "+"}
                 </button>
               </div>
             </div>
@@ -311,7 +406,7 @@ export function AdminTeamDetailPage() {
                       >
                         {removingCampaignId === campaign.id
                           ? "Removing..."
-                          : "..."}
+                          : "Remove"}
                       </button>
                     </td>
                   </tr>
@@ -348,7 +443,7 @@ export function AdminTeamDetailPage() {
                 onClick={() => void handleAssignUser()}
                 disabled={assigningUser || availableUsers.length === 0}
               >
-                {assigningUser ? "..." : "+"}
+                {assigningUser ? "Assigning..." : "+"}
               </button>
             </div>
           </div>
@@ -384,7 +479,9 @@ export function AdminTeamDetailPage() {
                       disabled={removingUserId === member.userId}
                       onClick={() => void handleRemoveUser(member.userId)}
                     >
-                      {removingUserId === member.userId ? "Removing..." : "..."}
+                      {removingUserId === member.userId
+                        ? "Removing..."
+                        : "Remove"}
                     </button>
                   </td>
                 </tr>
@@ -402,4 +499,9 @@ export function AdminTeamDetailPage() {
       </div>
     </section>
   );
+}
+
+function toOptionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }

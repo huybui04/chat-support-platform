@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ConfirmDialog } from "../../components/common/confirm-dialog";
 import { CrudFormCard } from "../../components/common/crud-form-card";
 import { PaginationControls } from "../../components/common/pagination-controls";
-import { RowActionButtons } from "../../components/common/row-action-buttons";
 import {
   createTeam,
   deleteTeam,
   getCurrentUser,
   getTeams,
-  updateTeam,
   type Team,
 } from "../../services/admin-api";
 import { useToast } from "../../store/toast-context";
@@ -36,11 +35,8 @@ export function AdminTeamsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createForm, setCreateForm] = useState<TeamForm>(initialForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<TeamForm>(initialForm);
   const [teamIdToDelete, setTeamIdToDelete] = useState<string | null>(null);
-  const { creating, savingId, deleting, runCreate, runSave, runDelete } =
-    useCrudActions();
+  const { creating, deleting, runCreate, runDelete } = useCrudActions();
 
   const loadTeams = useCallback(async () => {
     setLoading(true);
@@ -82,42 +78,6 @@ export function AdminTeamsPage() {
     if (created) {
       setCreateForm(initialForm);
       showSuccess("Team created successfully");
-      await loadTeams();
-    }
-  };
-
-  const startEdit = (team: Team) => {
-    setEditingId(team.id);
-    setEditForm({
-      name: team.name,
-      description: team.description ?? "",
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditForm(initialForm);
-  };
-
-  const saveEdit = async (id: string) => {
-    if (!editForm.name.trim()) {
-      showError("Team name is required");
-      return;
-    }
-
-    const updated = await runSave(
-      id,
-      async () =>
-        updateTeam(id, {
-          name: editForm.name.trim(),
-          description: toOptionalText(editForm.description),
-        }),
-      "Failed to update team",
-    );
-
-    if (updated) {
-      cancelEdit();
-      showSuccess("Team updated successfully");
       await loadTeams();
     }
   };
@@ -191,48 +151,24 @@ export function AdminTeamsPage() {
             {items.map((team) => (
               <tr key={team.id}>
                 <td>
-                  {editingId === team.id ? (
-                    <input
-                      value={editForm.name}
-                      disabled={savingId === team.id}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          name: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    team.name
-                  )}
+                  <Link
+                    className="campaign-name-link"
+                    to={`/admin/teams/${team.id}`}
+                  >
+                    {team.name}
+                  </Link>
                 </td>
-                <td>
-                  {editingId === team.id ? (
-                    <input
-                      value={editForm.description}
-                      disabled={savingId === team.id}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          description: event.target.value,
-                        }))
-                      }
-                    />
-                  ) : (
-                    (team.description ?? "-")
-                  )}
-                </td>
+                <td>{team.description ?? "-"}</td>
                 <td>{new Date(team.createdAt).toLocaleString()}</td>
                 <td>
-                  <RowActionButtons
-                    editing={editingId === team.id}
-                    saving={savingId === team.id}
-                    deletingDisabled={deleting}
-                    onSave={() => void saveEdit(team.id)}
-                    onCancel={cancelEdit}
-                    onEdit={() => startEdit(team)}
-                    onDelete={() => setTeamIdToDelete(team.id)}
-                  />
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={deleting}
+                    onClick={() => setTeamIdToDelete(team.id)}
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
