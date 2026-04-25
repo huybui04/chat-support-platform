@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
-import { Team, TeamMember } from '../../database/entities';
+import { Team, TeamMember, User, UserRole } from '../../database/entities';
 import { AddTeamMemberDto } from './dto/add-team-member.dto';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { ListTeamsQueryDto } from './dto/list-teams-query.dto';
@@ -109,6 +109,40 @@ export class TeamsService {
       relations: { user: true },
       order: { joinedAt: 'DESC' },
     });
+  }
+
+  async listMembersForUser(userId: string): Promise<User[]> {
+    const ownMemberships = await this.teamMembersRepository.find({
+      where: { userId },
+      select: { teamId: true },
+    });
+
+    const teamIds = Array.from(
+      new Set(ownMemberships.map((item) => item.teamId)),
+    );
+    if (teamIds.length === 0) {
+      return [];
+    }
+
+    const members = await this.teamMembersRepository.find({
+      where: { teamId: In(teamIds) },
+      relations: { user: true },
+      order: { joinedAt: 'DESC' },
+    });
+
+    const deduped = new Map<string, User>();
+
+    for (const member of members) {
+      if (!member.user || member.user.role !== UserRole.AGENT) {
+        continue;
+      }
+
+      if (!deduped.has(member.user.id)) {
+        deduped.set(member.user.id, member.user);
+      }
+    }
+
+    return Array.from(deduped.values());
   }
 
   async removeMember(teamId: string, userId: string): Promise<void> {

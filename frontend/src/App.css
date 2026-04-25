@@ -43,6 +43,223 @@
   opacity: 0.92;
 }
 
+.agent-dashboard-page {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.agent-dashboard-topline {
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    #f59e0b 0%,
+    #f59e0b 25%,
+    #38bdf8 25%,
+    #38bdf8 50%,
+    #6366f1 50%,
+    #6366f1 75%,
+    #60a5fa 75%,
+    #60a5fa 100%
+  );
+}
+
+.agent-dashboard-content {
+  display: grid;
+  gap: 12px;
+  padding: 6px 10px 14px;
+}
+
+.agent-dashboard-lower-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.agent-dashboard-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.agent-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.agent-kpi-grid article {
+  border: 1px solid #d8dee6;
+  background: #ffffff;
+  min-height: 122px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.agent-kpi-grid h2 {
+  margin: 0;
+  color: #5b6571;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.agent-kpi-grid p {
+  margin: 0;
+  color: #1e2c6d;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-team-panel {
+  border: 1px solid #d8dee6;
+  background: #ffffff;
+}
+
+.agent-team-panel > header {
+  min-height: 62px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.agent-team-panel h3 {
+  margin: 0;
+  font-size: 24px;
+  color: #5b6571;
+}
+
+.agent-team-table-wrap {
+  overflow-x: auto;
+}
+
+.agent-team-table {
+  min-width: 1100px;
+}
+
+.agent-team-table th,
+.agent-team-table td {
+  font-size: 14px;
+  color: #7c8796;
+  font-weight: 500;
+}
+
+.agent-team-table td {
+  color: #5f6977;
+}
+
+.agent-team-footer {
+  min-height: 48px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: #738091;
+  font-size: 14px;
+}
+
+.agent-team-footer select {
+  height: 28px;
+  border: 1px solid #d7dce4;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 2px 8px;
+}
+
+.agent-team-pagination {
+  margin-left: auto;
+  border: 1px solid #d7dce4;
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: #8a94a4;
+}
+
+.agent-campaigns-panel {
+  border: 1px solid #d8dee6;
+  background: #ffffff;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-width: 0;
+  align-self: start;
+  overflow: hidden;
+  position: relative;
+  z-index: 0;
+}
+
+.agent-campaigns-panel > header {
+  min-height: 54px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-campaigns-panel h3 {
+  margin: 0;
+  font-size: 24px;
+  color: #4b5563;
+}
+
+.agent-campaigns-panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-campaigns-panel li {
+  min-height: 48px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  color: #4b5563;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-campaigns-meta {
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 1400px) {
+  .agent-dashboard-lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .agent-dashboard-content {
+    padding: 8px;
+  }
+
+  .agent-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-kpi-grid p {
+    font-size: 30px;
+  }
+}
+
 .connection-panel,
 .panel,
 .metrics-grid article {
@@ -244,6 +461,16 @@ button.inline-action {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #bcccdc;
+}
+
+.sidebar-user-name {
+  margin: -8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f4f8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar nav {

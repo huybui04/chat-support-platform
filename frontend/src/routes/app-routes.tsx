@@ -61,6 +61,7 @@ export function AppRoutes() {
         <Route element={<AppShell />}>
           <Route path="/agent/dashboard" element={<AgentDashboardPage />} />
           <Route path="/agent/sessions" element={<AgentSessionListPage />} />
+          <Route path="/agent/interactions" element={<AdminContactsPage />} />
           <Route path="/agent/chat" element={<AgentChatWindowPage />} />
           <Route
             path="/agent/chat/:sessionId"

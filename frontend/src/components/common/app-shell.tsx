@@ -47,7 +47,8 @@ const supervisorNav: NavSection[] = [
 
 const agentNav: NavItem[] = [
   { label: "Dashboard", to: "/agent/dashboard" },
-  { label: "Session List", to: "/agent/sessions" },
+  { label: "Chat Inbox", to: "/agent/sessions" },
+  { label: "All Interaction History", to: "/agent/interactions" },
   // { label: "Chat Window", to: "/agent/chat" },
 ];
 
@@ -55,6 +56,7 @@ export function AppShell() {
   const location = useLocation();
   const { role, token, logout } = useAuth();
   const [agentUserId, setAgentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const currentPathWithQuery = `${location.pathname}${location.search}`;
 
   const activeSupervisorTopSection = useMemo(() => {
@@ -84,15 +86,25 @@ export function AppShell() {
     let active = true;
 
     const markOnline = async () => {
-      if (role !== "agent" || !token) {
+      if (!token) {
         if (active) {
           setAgentUserId(null);
+          setCurrentUserName(null);
         }
         return;
       }
 
       try {
         const currentUser = await getCurrentUser();
+
+        if (active) {
+          setCurrentUserName(currentUser.fullName);
+        }
+
+        if (role !== "agent") {
+          return;
+        }
+
         await updateUserStatus(currentUser.id, true);
 
         if (active) {
@@ -101,6 +113,7 @@ export function AppShell() {
       } catch {
         if (active) {
           setAgentUserId(null);
+          setCurrentUserName(null);
         }
       }
     };
@@ -166,6 +179,9 @@ export function AppShell() {
       <aside className="sidebar">
         <p className="brand">Support Console</p>
         <p className="role-tag">Role: {role}</p>
+        {currentUserName ? (
+          <p className="sidebar-user-name">{currentUserName}</p>
+        ) : null}
         {role === "supervisor" ? (
           <nav className="sidebar-supervisor-nav">
             {supervisorNav.map((section) => {
@@ -206,7 +222,7 @@ export function AppShell() {
             {agentNav.map((item) => (
               <Link
                 key={item.to}
-                className={location.pathname === item.to ? "active" : ""}
+                className={currentPathWithQuery === item.to ? "active" : ""}
                 to={item.to}
               >
                 {item.label}

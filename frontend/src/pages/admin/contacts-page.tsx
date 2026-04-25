@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { PaginationControls } from "../../components/common/pagination-controls";
-import {
-  getSessionMessages,
-  type ChatMessage,
-} from "../../services/agent-api";
+import { getSessionMessages, type ChatMessage } from "../../services/agent-api";
 import {
   getInteractionHistory,
   type InteractionSession,
 } from "../../services/admin-api";
+import { useAuth } from "../../store/auth-context";
 import type { ApiMeta } from "../../types/api";
 
 const PAGE_SIZE = 20;
@@ -28,6 +26,7 @@ const STATUS_OPTIONS: Array<InteractionSession["status"]> = [
 ];
 
 export function AdminContactsPage() {
+  const { role } = useAuth();
   const [items, setItems] = useState<InteractionSession[]>([]);
   const [meta, setMeta] = useState<ApiMeta | undefined>(undefined);
   const [page, setPage] = useState(1);
@@ -62,6 +61,7 @@ export function AdminContactsPage() {
           page,
           limit: PAGE_SIZE,
           status: statusFilter === "all" ? undefined : statusFilter,
+          visibilityScope: role === "agent" ? "team" : undefined,
         });
 
         if (!mounted) {
@@ -93,7 +93,7 @@ export function AdminContactsPage() {
     return () => {
       mounted = false;
     };
-  }, [page, statusFilter]);
+  }, [page, role, statusFilter]);
 
   useEffect(() => {
     if (!viewingItem) {
@@ -149,7 +149,8 @@ export function AdminContactsPage() {
         return false;
       }
 
-      const contactText = `${item.contactName ?? ""} ${item.contactId}`.toLowerCase();
+      const contactText =
+        `${item.contactName ?? ""} ${item.contactId}`.toLowerCase();
       const campaignText = `${item.campaignName ?? ""}`.toLowerCase();
       const agentText = `${item.agentName ?? ""}`.toLowerCase();
 
@@ -248,7 +249,11 @@ export function AdminContactsPage() {
       </p>
 
       <div className="interaction-toolbar">
-        <button type="button" className="interaction-download-btn" onClick={downloadCsv}>
+        <button
+          type="button"
+          className="interaction-download-btn"
+          onClick={downloadCsv}
+        >
           Download
         </button>
 
@@ -555,7 +560,8 @@ function formatHandlingTime(startedAt: string | null, endedAt: string | null) {
     return "-";
   }
 
-  const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+  const durationMs =
+    new Date(endedAt).getTime() - new Date(startedAt).getTime();
   if (!Number.isFinite(durationMs) || durationMs <= 0) {
     return "-";
   }

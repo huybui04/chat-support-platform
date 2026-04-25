@@ -18,8 +18,11 @@ export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
   @Get()
-  async findAll(@Query() query: ListSessionsQueryDto) {
-    const result = await this.sessionsService.findAll(query);
+  async findAll(
+    @Query() query: ListSessionsQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.sessionsService.findAll(query, user);
     return apiSuccess(result.items, result.meta);
   }
 

@@ -31,6 +31,7 @@ type GetSessionsInput = {
   agentId?: string;
   page?: number;
   limit?: number;
+  visibilityScope?: "team" | "agent";
 };
 
 export async function getSessions(
@@ -38,6 +39,7 @@ export async function getSessions(
 ): Promise<PaginatedResult<ChatSession>> {
   const page = input.page ?? 1;
   const limit = input.limit ?? 30;
+  const visibilityScope = input.visibilityScope ?? "team";
 
   const searchParams = new URLSearchParams({
     status: input.status,
@@ -48,6 +50,8 @@ export async function getSessions(
   if (input.agentId) {
     searchParams.set("agentId", input.agentId);
   }
+
+  searchParams.set("visibilityScope", visibilityScope);
 
   const response = await apiRequest<ApiResponse<ChatSession[]>>(
     `/sessions?${searchParams.toString()}`,

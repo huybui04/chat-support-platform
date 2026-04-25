@@ -504,6 +504,11 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
   return response.data;
 }
 
+export async function getMyTeamMembers(): Promise<User[]> {
+  const response = await apiRequest<ApiResponse<User[]>>(`/teams/me/members`);
+  return response.data;
+}
+
 export async function addTeamMember(teamId: string, userId: string) {
   const response = await apiRequest<ApiResponse<TeamMember>>(
     `/teams/${teamId}/members`,
@@ -560,6 +565,7 @@ export async function getInteractionHistory(
     status?: InteractionSession["status"];
     campaignId?: string;
     agentId?: string;
+    visibilityScope?: "team" | "agent";
   } = {},
 ): Promise<PaginatedResult<InteractionSession>> {
   const response = await apiRequest<ApiResponse<InteractionSession[]>>(

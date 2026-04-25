@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { PaginationControls } from "../../components/common/pagination-controls";
 import { createChatSocket } from "../../socket/chat-socket";
@@ -55,6 +55,7 @@ export function AgentSessionListPage() {
   const { token } = useAuth();
   const { showSuccess } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [pendingItems, setPendingItems] = useState<ChatSession[]>([]);
   const [pendingMeta, setPendingMeta] = useState<ApiMeta | undefined>();
   const [pendingPage, setPendingPage] = useState(1);
@@ -67,7 +68,12 @@ export function AgentSessionListPage() {
   const [completedMeta, setCompletedMeta] = useState<ApiMeta | undefined>();
   const [completedPage, setCompletedPage] = useState(1);
   const [completedLoading, setCompletedLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<SessionTab>("pending");
+  const [activeTab, setActiveTab] = useState<SessionTab>(() => {
+    const tab = searchParams.get("tab");
+    return tab === "active" || tab === "completed" || tab === "pending"
+      ? tab
+      : "pending";
+  });
   const [keyword, setKeyword] = useState("");
   const [channelFilter, setChannelFilter] =
     useState<SessionChannelFilter>("all");
@@ -97,6 +103,7 @@ export function AgentSessionListPage() {
         status: "pending",
         page: pendingPage,
         limit: PAGE_SIZE,
+        visibilityScope: "agent",
       });
 
       if (
@@ -198,6 +205,20 @@ export function AgentSessionListPage() {
   useEffect(() => {
     void refreshCompleted();
   }, [refreshCompleted]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "active" || tab === "completed" || tab === "pending") {
+      if (tab !== activeTab) {
+        setActiveTab(tab);
+      }
+      return;
+    }
+
+    if (activeTab !== "pending") {
+      setActiveTab("pending");
+    }
+  }, [activeTab, searchParams]);
 
   const refresh = useCallback(async () => {
     setError("");
@@ -398,11 +419,29 @@ export function AgentSessionListPage() {
   const currentTab =
     tabConfig.find((tab) => tab.id === activeTab) ?? tabConfig[0];
 
+  const onTabChange = (nextTab: SessionTab) => {
+    setActiveTab(nextTab);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+
+        if (nextTab === "pending") {
+          next.delete("tab");
+        } else {
+          next.set("tab", nextTab);
+        }
+
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   return (
     <section className="placeholder-page agent-session-page">
       <div className="agent-session-hero">
         <div>
-          <h1>Session Queue</h1>
+          <h1>Chat Inbox</h1>
           <p>
             Prioritize pending chats, handle active sessions, and review
             completed conversations in one workspace.
@@ -475,7 +514,7 @@ export function AgentSessionListPage() {
             className={`management-tab ${activeTab === tab.id ? "active" : ""}`}
             role="tab"
             aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => onTabChange(tab.id)}
           >
             {tab.label} ({tab.count})
           </button>

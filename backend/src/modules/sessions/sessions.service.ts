@@ -15,12 +15,16 @@ import {
   ChatSession,
   ChatSessionStatus,
   User,
+  UserRole,
 } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
 import { AcceptSessionDto } from './dto/accept-session.dto';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionMessagesQueryDto } from './dto/list-session-messages-query.dto';
-import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
+import {
+  ListSessionsQueryDto,
+  SessionVisibilityScope,
+} from './dto/list-sessions-query.dto';
 
 @Injectable()
 export class SessionsService {
@@ -38,7 +42,7 @@ export class SessionsService {
     private readonly chatGateway: ChatGateway,
   ) {}
 
-  async findAll(query: ListSessionsQueryDto) {
+  async findAll(query: ListSessionsQueryDto, currentUser?: AuthUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -73,6 +77,46 @@ export class SessionsService {
       qb.andWhere('session.agentId = :agentId', {
         agentId: query.agentId,
       });
+    }
+
+    const isAgentOnlyRequest =
+      !!currentUser &&
+      currentUser.roles.includes(UserRole.AGENT) &&
+      !currentUser.roles.includes(UserRole.SUPERVISOR);
+
+    if (isAgentOnlyRequest) {
+      const currentAgent = await this.usersRepository.findOne({
+        where: { keycloakId: currentUser.sub },
+        select: { id: true },
+      });
+
+      if (!currentAgent) {
+        throw new NotFoundException('User not found');
+      }
+
+      const visibilityScope =
+        query.visibilityScope ?? SessionVisibilityScope.TEAM;
+
+      if (visibilityScope === SessionVisibilityScope.AGENT) {
+        qb.andWhere(
+          `session.campaignId IN (
+            SELECT ca.campaign_id
+            FROM campaign_agents ca
+            WHERE ca.agent_id = :currentAgentUserId
+          )`,
+          { currentAgentUserId: currentAgent.id },
+        );
+      } else {
+        qb.andWhere(
+          `session.campaignId IN (
+            SELECT ct.campaign_id
+            FROM campaign_teams ct
+            INNER JOIN team_members tm ON tm.team_id = ct.team_id
+            WHERE tm.user_id = :currentAgentUserId
+          )`,
+          { currentAgentUserId: currentAgent.id },
+        );
+      }
     }
 
     const [items, total] = await qb.getManyAndCount();
