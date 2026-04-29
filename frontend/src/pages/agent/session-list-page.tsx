@@ -103,7 +103,8 @@ export function AgentSessionListPage() {
         status: "pending",
         page: pendingPage,
         limit: PAGE_SIZE,
-        visibilityScope: "agent",
+        // Use team visibility for pending queue so agents receive sessions from campaigns assigned to their team
+        visibilityScope: "team",
       });
 
       if (

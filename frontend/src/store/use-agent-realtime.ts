@@ -34,6 +34,11 @@ export function useAgentRealtime() {
   const [agentStatuses, setAgentStatuses] = useState<Record<string, boolean>>(
     {},
   );
+  const [totalHandlingSeconds, setTotalHandlingSeconds] = useState(0);
+  const [avgHandlingSeconds, setAvgHandlingSeconds] = useState(0);
+  const [agentAvgHandlingSecondsMap, setAgentAvgHandlingSecondsMap] = useState<
+    Record<string, number>
+  >({});
   const [logs, setLogs] = useState<RealtimeLogItem[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
@@ -45,8 +50,16 @@ export function useAgentRealtime() {
       pendingCount: pendingSessions.length,
       assignedCount: assignedSessions.length,
       onlineAgents: Object.values(agentStatuses).filter(Boolean).length,
+      totalHandlingSeconds,
+      avgHandlingSeconds,
     }),
-    [agentStatuses, assignedSessions.length, pendingSessions.length],
+    [
+      agentStatuses,
+      assignedSessions.length,
+      pendingSessions.length,
+      totalHandlingSeconds,
+      avgHandlingSeconds,
+    ],
   );
 
   const pushLog = useCallback((event: string, payload: unknown) => {
@@ -62,10 +75,12 @@ export function useAgentRealtime() {
 
   const preloadSessions = useCallback(async () => {
     try {
-      const [pendingResult, assignedResult] = await Promise.all([
-        getSessions({ status: "pending", page: 1, limit: 30 }),
-        getSessions({ status: "active", page: 1, limit: 30 }),
-      ]);
+      const [pendingResult, assignedResult, completedResult] =
+        await Promise.all([
+          getSessions({ status: "pending", page: 1, limit: 30 }),
+          getSessions({ status: "active", page: 1, limit: 30 }),
+          getSessions({ status: "completed", page: 1, limit: 100 }),
+        ]);
 
       setPendingSessions(
         pendingResult.items.map((item) => ({
@@ -93,6 +108,47 @@ export function useAgentRealtime() {
         });
         return next;
       });
+
+      // Compute handling time (from completed sessions) and per-agent averages
+      try {
+        const durations: number[] = [];
+        const perAgentAcc: Record<string, { total: number; count: number }> =
+          {};
+
+        for (const s of completedResult.items) {
+          if (!s.startedAt || !s.endedAt) continue;
+          const started = new Date(s.startedAt).getTime();
+          const ended = new Date(s.endedAt).getTime();
+          const seconds = Math.max(0, Math.round((ended - started) / 1000));
+          if (seconds <= 0) continue;
+          durations.push(seconds);
+
+          if (s.agentId) {
+            const acc = perAgentAcc[s.agentId] ?? { total: 0, count: 0 };
+            acc.total += seconds;
+            acc.count += 1;
+            perAgentAcc[s.agentId] = acc;
+          }
+        }
+
+        const total = durations.reduce((a, b) => a + b, 0);
+        const avg =
+          durations.length > 0 ? Math.round(total / durations.length) : 0;
+
+        const perAgentAvgMap: Record<string, number> = {};
+        for (const [agentId, acc] of Object.entries(perAgentAcc)) {
+          perAgentAvgMap[agentId] =
+            acc.count > 0 ? Math.round(acc.total / acc.count) : 0;
+        }
+
+        setTotalHandlingSeconds(total);
+        setAvgHandlingSeconds(avg);
+        setAgentAvgHandlingSecondsMap(perAgentAvgMap);
+      } catch (err) {
+        setTotalHandlingSeconds(0);
+        setAvgHandlingSeconds(0);
+        setAgentAvgHandlingSecondsMap({});
+      }
 
       pushLog("snapshot_loaded", {
         pending: pendingResult.items.length,
@@ -231,6 +287,7 @@ export function useAgentRealtime() {
     pendingSessions,
     assignedSessions,
     metrics,
+    agentAvgHandlingSecondsMap,
     logs,
     connect,
     disconnect,

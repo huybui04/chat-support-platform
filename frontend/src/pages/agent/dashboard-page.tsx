@@ -3,8 +3,13 @@ import { getMyTeamMembers, type User } from "../../services/admin-api";
 import { useAgentRealtime } from "../../store/use-agent-realtime";
 
 export function AgentDashboardPage() {
-  const { pendingSessions, assignedSessions, metrics, connectionState } =
-    useAgentRealtime();
+  const {
+    pendingSessions,
+    assignedSessions,
+    metrics,
+    connectionState,
+    agentAvgHandlingSecondsMap,
+  } = useAgentRealtime();
 
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
   const [teamLoading, setTeamLoading] = useState(true);
@@ -31,7 +36,11 @@ export function AgentDashboardPage() {
     };
   }, []);
 
-  const teamRows = buildTeamRows(teamMembers, assignedSessions);
+  const teamRows = buildTeamRows(
+    teamMembers,
+    assignedSessions,
+    agentAvgHandlingSecondsMap,
+  );
   const campaigns = buildCampaigns(pendingSessions, assignedSessions);
 
   return (
@@ -50,7 +59,11 @@ export function AgentDashboardPage() {
           </article>
           <article>
             <h2>Total Handling Time</h2>
-            <p>00m00s</p>
+            <p>{formatDuration(metrics.totalHandlingSeconds ?? 0)}</p>
+          </article>
+          <article>
+            <h2>Average Handling Time</h2>
+            <p>{formatDuration(metrics.avgHandlingSeconds ?? 0)}</p>
           </article>
         </section>
 
@@ -106,7 +119,9 @@ export function AgentDashboardPage() {
                       <td>-</td>
                       <td>-</td>
                       <td>
-                        <span className={`status-badge ${row.isOnline ? "online" : "offline"}`}>
+                        <span
+                          className={`status-badge ${row.isOnline ? "online" : "offline"}`}
+                        >
                           {row.isOnline ? "Online" : "Offline"}
                         </span>
                       </td>
@@ -118,7 +133,7 @@ export function AgentDashboardPage() {
 
             <footer className="agent-team-footer">
               <span>Show</span>
-              <select value="10" aria-label="Rows per page">
+              <select value="10" onChange={() => {}} aria-label="Rows per page">
                 <option value="10">10</option>
                 <option value="20">20</option>
               </select>
@@ -169,6 +184,7 @@ function buildTeamRows(
     agentId?: string | null;
     agentName?: string | null;
   }>,
+  agentAvgMap: Record<string, number> = {},
 ): TeamRow[] {
   // Build a lookup of session counts per agentId
   const sessionCountMap = new Map<string, number>();
@@ -185,7 +201,7 @@ function buildTeamRows(
     id: member.id,
     name: member.fullName,
     handled: sessionCountMap.get(member.id) ?? 0,
-    avgHandlingTime: "00m00s",
+    avgHandlingTime: formatDuration(agentAvgMap[member.id] ?? 0),
     isOnline: member.isOnline,
   }));
 }
@@ -203,4 +219,11 @@ function buildCampaigns(
   }
 
   return Array.from(names).slice(0, 8);
+}
+
+function formatDuration(totalSeconds: number) {
+  const secs = Math.max(0, Math.round(totalSeconds ?? 0));
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2, "0")}m${String(s).padStart(2, "0")}s`;
 }
