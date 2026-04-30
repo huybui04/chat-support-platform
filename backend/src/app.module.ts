@@ -11,6 +11,7 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { ChannelMappingsModule } from './modules/channel-mappings/channel-mappings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
+import { GmailModule } from './modules/gmail/gmail.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { TeamsModule } from './modules/teams/teams.module';
@@ -30,6 +31,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     ChatModule,
     ReportsModule,
     WhatsappModule,
+    GmailModule,
   ],
   controllers: [AppController],
   providers: [

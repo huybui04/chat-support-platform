@@ -84,7 +84,7 @@
 
 .agent-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -634,6 +634,12 @@ button.inline-action {
   background: #dbeafe;
   border-color: #93c5fd;
   color: #1d4ed8;
+}
+
+.status-badge.channel-gmail {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 
 .error-note {

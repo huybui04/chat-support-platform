@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -39,6 +41,7 @@ export class SessionsService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(CampaignContact)
     private readonly campaignContactsRepository: Repository<CampaignContact>,
+    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) {}
 

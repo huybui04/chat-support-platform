@@ -15,6 +15,7 @@ export enum ExternalChannel {
   WHATSAPP = 'whatsapp',
   INSTAGRAM = 'instagram',
   MESSENGER = 'messenger',
+  GMAIL = 'gmail',
 }
 
 @Entity({ name: 'channel_campaign_mappings' })

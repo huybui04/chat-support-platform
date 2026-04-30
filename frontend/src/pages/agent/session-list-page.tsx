@@ -48,6 +48,10 @@ function formatChannel(channel: ChatSession["channel"]): string {
     return "Messenger";
   }
 
+  if (channel === "gmail") {
+    return "Gmail";
+  }
+
   return "Web";
 }
 
@@ -500,6 +504,7 @@ export function AgentSessionListPage() {
           <option value="whatsapp">WhatsApp</option>
           <option value="instagram">Instagram</option>
           <option value="messenger">Messenger</option>
+          <option value="gmail">Gmail</option>
         </select>
       </div>
 

@@ -9,7 +9,7 @@ export type ChatSession = {
   contactName?: string | null;
   agentId: string | null;
   agentName?: string | null;
-  channel: "web" | "whatsapp" | "instagram" | "messenger";
+  channel: "web" | "whatsapp" | "instagram" | "messenger" | "gmail";
   status: "pending" | "active" | "completed" | "abandoned";
   startedAt: string | null;
   endedAt: string | null;

@@ -20,6 +20,7 @@ export enum SessionChannel {
   WHATSAPP = 'whatsapp',
   INSTAGRAM = 'instagram',
   MESSENGER = 'messenger',
+  GMAIL = 'gmail',
 }
 
 export enum ChatSessionStatus {

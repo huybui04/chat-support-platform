@@ -20,6 +20,7 @@ import {
   SessionChannel,
 } from '../../database/entities';
 import { SendMessageDto } from './dto/send-message.dto';
+import { GmailService } from '../gmail/gmail.service';
 
 type ExternalAccountCampaignMap = Record<string, string | string[]>;
 
@@ -36,6 +37,7 @@ export class ChatService {
     private readonly campaignsRepository: Repository<Campaign>,
     @InjectRepository(ChannelCampaignMapping)
     private readonly channelMappingsRepository: Repository<ChannelCampaignMapping>,
+    private readonly gmailService: GmailService,
   ) {}
 
   async ensureSessionExists(sessionId: string): Promise<ChatSession> {
@@ -67,6 +69,16 @@ export class ChatService {
         `Sending Messenger outbound for session=${session.id} campaign=${session.campaignId}`,
       );
       await this.sendMessengerOutboundMessage(session, payload);
+    } else if (session.channel === SessionChannel.GMAIL) {
+      if (payload.messageType && payload.messageType !== MessageType.TEXT) {
+        throw new BadRequestException(
+          'Gmail outbound currently supports text messages only',
+        );
+      }
+      this.logger.debug(
+        `Sending Gmail outbound for session=${session.id} campaign=${session.campaignId}`,
+      );
+      await this.gmailService.sendOutboundMessage(session, payload.content);
     } else {
       this.logger.debug(
         `Skip channel outbound for session=${session.id} because channel=${session.channel}`,

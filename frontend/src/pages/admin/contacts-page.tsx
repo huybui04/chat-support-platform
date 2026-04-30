@@ -16,6 +16,7 @@ const CHANNEL_OPTIONS: Array<InteractionSession["channel"]> = [
   "whatsapp",
   "instagram",
   "messenger",
+  "gmail",
 ];
 
 const STATUS_OPTIONS: Array<InteractionSession["status"]> = [

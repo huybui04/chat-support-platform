@@ -28,6 +28,7 @@ export enum CampaignChannel {
   WHATSAPP = 'whatsapp',
   INSTAGRAM = 'instagram',
   MESSENGER = 'messenger',
+  GMAIL = 'gmail',
 }
 
 export enum CampaignType {

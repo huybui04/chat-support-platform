@@ -8,6 +8,7 @@ export * from './chat-message.entity';
 export * from './chat-session.entity';
 export * from './contact.entity';
 export * from './csv-import-log.entity';
+export * from './gmail-account.entity';
 export * from './team-member.entity';
 export * from './team.entity';
 export * from './user.entity';
