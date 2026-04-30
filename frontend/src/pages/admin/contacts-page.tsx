@@ -61,8 +61,8 @@ export function AdminContactsPage() {
           page,
           limit: PAGE_SIZE,
           status: statusFilter === "all" ? undefined : statusFilter,
-          // For agent users, show interaction history for campaigns assigned directly to them
-          visibilityScope: role === "agent" ? "agent" : undefined,
+          // For agent users, show interaction history for campaigns assigned to their team
+          visibilityScope: role === "agent" ? "team" : undefined,
         });
 
         if (!mounted) {
