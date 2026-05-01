@@ -10,8 +10,10 @@ import { useParams } from "react-router-dom";
 
 import {
   endSession,
+  getSessionById,
   getSessionMessages,
   type ChatMessage,
+  type ChatSession,
 } from "../../services/agent-api";
 import { createChatSocket } from "../../socket/chat-socket";
 import { useAuth } from "../../store/auth-context";
@@ -32,6 +34,35 @@ function formatSenderLabel(senderType: ChatMessage["senderType"]): string {
   return "System";
 }
 
+function formatChannelLabel(channel?: ChatSession["channel"]) {
+  if (channel === "whatsapp") {
+    return "WhatsApp";
+  }
+
+  if (channel === "instagram") {
+    return "Instagram";
+  }
+
+  if (channel === "messenger") {
+    return "Messenger";
+  }
+
+  if (channel === "gmail") {
+    return "Gmail";
+  }
+
+  return "Web";
+}
+
+function isGmailSession(channel?: ChatSession["channel"]) {
+  return channel === "gmail";
+}
+
+function formatEmailAddress(value?: string | null, fallback = "-") {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : fallback;
+}
+
 export function AgentChatWindowPage() {
   const params = useParams();
   const { token } = useAuth();
@@ -42,6 +73,7 @@ export function AgentChatWindowPage() {
   const olderMessageLimit = 20;
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [session, setSession] = useState<ChatSession | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("disconnected");
   const [olderMessageCursor, setOlderMessageCursor] = useState<string>();
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -57,6 +89,7 @@ export function AgentChatWindowPage() {
   const preserveScrollOnPrependRef = useRef(false);
   const prevScrollHeightRef = useRef(0);
   const selectedSessionId = (params.sessionId ?? "").trim();
+  const gmailMode = isGmailSession(session?.channel);
 
   const agentMessageCount = messages.filter(
     (message) => message.senderType === "agent",
@@ -67,6 +100,31 @@ export function AgentChatWindowPage() {
 
   useEffect(() => {
     activeSessionRef.current = selectedSessionId;
+  }, [selectedSessionId]);
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setSession(null);
+      return;
+    }
+
+    let active = true;
+
+    void getSessionById(selectedSessionId)
+      .then((result) => {
+        if (active) {
+          setSession(result);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSession(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [selectedSessionId]);
 
   useEffect(() => {
@@ -427,16 +485,24 @@ export function AgentChatWindowPage() {
   };
 
   return (
-    <section className="placeholder-page agent-chat-page">
-      <header className="agent-chat-hero">
+    <section
+      className={`placeholder-page agent-chat-page ${gmailMode ? "agent-email-page" : ""}`}
+    >
+      <header
+        className={`agent-chat-hero ${gmailMode ? "agent-email-hero" : ""}`}
+      >
         <div>
-          <h1>Live Chat Workspace</h1>
+          <h1>{gmailMode ? "Gmail Conversation" : "Live Chat Workspace"}</h1>
           <p>
-            Handle realtime conversations, monitor typing/activity, and close
-            sessions from one focused panel.
+            {gmailMode
+              ? "Review the email thread with Gmail-style headers and message cards."
+              : "Handle realtime conversations, monitor typing/activity, and close sessions from one focused panel."}
           </p>
         </div>
         <div className="agent-chat-hero-meta">
+          <span className="agent-chat-session-tag">
+            Channel: {formatChannelLabel(session?.channel)}
+          </span>
           <span className="agent-chat-session-tag">
             Session:{" "}
             {selectedSessionId
@@ -447,11 +513,19 @@ export function AgentChatWindowPage() {
         </div>
       </header>
 
-      <section className="agent-chat-shell">
-        <article className="agent-chat-thread-card">
+      <section
+        className={`agent-chat-shell ${gmailMode ? "agent-email-shell" : ""}`}
+      >
+        <article
+          className={`agent-chat-thread-card ${gmailMode ? "agent-email-thread-card" : ""}`}
+        >
           <header className="agent-chat-thread-head">
             <div>
-              <h2>Conversation</h2>
+              <h2>
+                {gmailMode
+                  ? (session?.campaignName ?? "Email thread")
+                  : "Conversation"}
+              </h2>
               <p>{messages.length} messages</p>
             </div>
             <div className="agent-chat-thread-head-right">
@@ -479,7 +553,7 @@ export function AgentChatWindowPage() {
           </header>
 
           <div
-            className="agent-chat-thread"
+            className={`agent-chat-thread ${gmailMode ? "agent-email-thread" : ""}`}
             role="log"
             aria-live="polite"
             ref={messagesContainerRef}
@@ -504,39 +578,130 @@ export function AgentChatWindowPage() {
               </p>
             ) : null}
 
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`agent-chat-bubble ${message.senderType}`}
-              >
-                <header>
-                  <strong>{formatSenderLabel(message.senderType)}</strong>
-                  <span>
-                    {new Date(message.createdAt).toLocaleTimeString()}
-                  </span>
-                </header>
-                <p>{message.content}</p>
-              </article>
-            ))}
+            {messages.map((message, index) => {
+              const isEmail = gmailMode;
+              const previousMessage = messages[index - 1];
+              const emailSubject =
+                session?.campaignName?.trim() ||
+                (index === 0
+                  ? `Re: ${message.content.slice(0, 24)}`
+                  : `Re: ${session?.contactName ?? "message"}`);
+              const fromAddress =
+                message.senderType === "agent"
+                  ? formatEmailAddress(session?.agentName, "You")
+                  : formatEmailAddress(
+                      session?.contactName,
+                      "customer@unknown.com",
+                    );
+              const toAddress =
+                message.senderType === "agent"
+                  ? formatEmailAddress(
+                      session?.contactName,
+                      "customer@unknown.com",
+                    )
+                  : formatEmailAddress(
+                      session?.agentName,
+                      "support@company.com",
+                    );
+
+              return (
+                <article
+                  key={message.id}
+                  className={`agent-chat-bubble ${message.senderType} ${isEmail ? "agent-email-card" : ""}`}
+                >
+                  {isEmail ? (
+                    <>
+                      <header className="agent-email-card-head">
+                        <div>
+                          <strong>
+                            {message.senderType === "agent"
+                              ? "Re: "
+                              : "Subject: "}
+                            {emailSubject}
+                          </strong>
+                          <div className="agent-email-meta-row">
+                            <span>
+                              <b>From:</b> {fromAddress}
+                            </span>
+                            <span>
+                              <b>To:</b> {toAddress}
+                            </span>
+                            <span>
+                              <b>Sent:</b>{" "}
+                              {new Date(message.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="agent-email-card-chip">
+                          {message.senderType === "agent"
+                            ? "Outgoing"
+                            : "Incoming"}
+                        </span>
+                      </header>
+
+                      <div className="agent-email-card-body">
+                        <p>{message.content}</p>
+
+                        {previousMessage ? (
+                          <blockquote className="agent-email-quote">
+                            <span>Quoted previous message</span>
+                            <p>{previousMessage.content}</p>
+                          </blockquote>
+                        ) : null}
+
+                        {message.attachmentUrl ? (
+                          <a
+                            className="agent-email-attachment"
+                            href={message.attachmentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open attachment
+                          </a>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <header>
+                        <strong>{formatSenderLabel(message.senderType)}</strong>
+                        <span>
+                          {new Date(message.createdAt).toLocaleTimeString()}
+                        </span>
+                      </header>
+                      <p>{message.content}</p>
+                    </>
+                  )}
+                </article>
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="agent-chat-composer">
+          <div
+            className={`agent-chat-composer ${gmailMode ? "agent-email-composer" : ""}`}
+          >
             <textarea
               value={draft}
               onChange={(event) => onDraftChange(event.target.value)}
               onKeyDown={onDraftKeyDown}
-              rows={3}
-              placeholder="Type message..."
+              rows={gmailMode ? 5 : 3}
+              placeholder={
+                gmailMode ? "Reply to this email..." : "Type message..."
+              }
             />
             <div className="agent-chat-composer-actions">
-              <small>Enter to send, Shift + Enter for new line</small>
+              <small>
+                {gmailMode
+                  ? "Enter to send, Shift + Enter for new line"
+                  : "Enter to send, Shift + Enter for new line"}
+              </small>
               <button
                 type="button"
                 onClick={sendMessage}
                 disabled={!draft.trim()}
               >
-                Send Message
+                {gmailMode ? "Send Email" : "Send Message"}
               </button>
             </div>
           </div>

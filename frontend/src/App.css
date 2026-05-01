@@ -1840,6 +1840,141 @@ button.inline-action {
   gap: 14px;
 }
 
+.agent-email-page .agent-chat-hero {
+  background: linear-gradient(120deg, #3f3f46 0%, #334155 42%, #0f766e 100%);
+}
+
+.agent-email-page .agent-chat-thread-card {
+  background: #f8fafc;
+}
+
+.agent-email-page .agent-chat-thread-head {
+  background: #ffffff;
+}
+
+.agent-email-page .agent-chat-thread {
+  background: #f3f4f6;
+}
+
+.agent-email-page .agent-chat-bubble {
+  width: min(100%, 980px);
+  border-color: #d6dbe3;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.agent-email-page .agent-chat-bubble.agent {
+  background: #ffffff;
+  border-color: #bfd7ff;
+}
+
+.agent-email-page .agent-email-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.agent-email-page .agent-email-card-head {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-email-page .agent-email-card-head strong {
+  display: block;
+  color: #111827;
+  font-size: 15px;
+}
+
+.agent-email-page .agent-email-meta-row {
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.agent-email-page .agent-email-meta-row span {
+  line-height: 1.35;
+}
+
+.agent-email-page .agent-email-card-chip {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.agent-email-page .agent-email-card-body {
+  padding: 16px;
+  color: #1f2937;
+}
+
+.agent-email-page .agent-email-card-body > p {
+  margin: 0;
+  color: #1f2937;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-email-page .agent-email-quote {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-left: 4px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.agent-email-page .agent-email-quote span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.agent-email-page .agent-email-quote p {
+  margin: 0;
+  color: #334155;
+}
+
+.agent-email-page .agent-email-attachment {
+  display: inline-flex;
+  margin-top: 14px;
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.agent-email-page .agent-email-attachment:hover {
+  text-decoration: underline;
+}
+
+.agent-email-page .agent-email-composer {
+  background: #f8fafc;
+  border-top-color: #dbe3ee;
+}
+
+.agent-email-page .agent-email-composer textarea {
+  background: #ffffff;
+}
+
+.agent-email-page .agent-email-thread {
+  gap: 12px;
+}
+
+.agent-email-page .agent-email-thread .status-note {
+  width: 100%;
+}
+
 .agent-chat-hero {
   border: 1px solid var(--line);
   border-radius: 16px;

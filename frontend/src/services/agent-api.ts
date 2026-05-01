@@ -16,6 +16,8 @@ export type ChatSession = {
   createdAt: string;
 };
 
+export type SessionDetails = ChatSession;
+
 export type ChatMessage = {
   id: string;
   sessionId: string;
@@ -86,6 +88,16 @@ export async function endSession(sessionId: string): Promise<ChatSession> {
       method: "POST",
       body: {},
     },
+  );
+
+  return response.data;
+}
+
+export async function getSessionById(
+  sessionId: string,
+): Promise<SessionDetails> {
+  const response = await apiRequest<ApiResponse<SessionDetails>>(
+    `/sessions/${sessionId}`,
   );
 
   return response.data;
