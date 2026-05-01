@@ -16,6 +16,7 @@ import {
   ChatMessage,
   ChatSession,
   ChatSessionStatus,
+  SessionChannel,
   User,
   UserRole,
 } from '../../database/entities';
@@ -79,6 +80,12 @@ export class SessionsService {
     if (query.agentId) {
       qb.andWhere('session.agentId = :agentId', {
         agentId: query.agentId,
+      });
+    }
+
+    if (query.channels?.length) {
+      qb.andWhere('session.channel IN (:...channels)', {
+        channels: query.channels,
       });
     }
 

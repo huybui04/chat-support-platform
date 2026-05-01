@@ -48,6 +48,7 @@ const supervisorNav: NavSection[] = [
 const agentNav: NavItem[] = [
   { label: "Dashboard", to: "/agent/dashboard" },
   { label: "Chat Inbox", to: "/agent/sessions" },
+  { label: "Email Inbox", to: "/agent/emails" },
   { label: "All Interaction History", to: "/agent/interactions" },
   // { label: "Chat Window", to: "/agent/chat" },
 ];

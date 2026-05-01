@@ -29,6 +29,7 @@ export type ChatMessage = {
 type GetSessionsInput = {
   status: ChatSession["status"];
   agentId?: string;
+  channels?: ChatSession["channel"][];
   page?: number;
   limit?: number;
   visibilityScope?: "team" | "agent";
@@ -49,6 +50,12 @@ export async function getSessions(
 
   if (input.agentId) {
     searchParams.set("agentId", input.agentId);
+  }
+
+  if (input.channels?.length) {
+    for (const channel of input.channels) {
+      searchParams.append("channels", channel);
+    }
   }
 
   searchParams.set("visibilityScope", visibilityScope);

@@ -13,6 +13,7 @@ import { AdminTeamsPage } from "../pages/admin/teams-page";
 import { AgentChatWindowPage } from "../pages/agent/chat-window-page";
 import { AgentDashboardPage } from "../pages/agent/dashboard-page";
 import { AgentSessionListPage } from "../pages/agent/session-list-page";
+import { AgentEmailListPage } from "../pages/agent/email-list-page";
 import { AuthCallbackPage } from "../pages/auth/auth-callback-page";
 import { LoginPage } from "../pages/auth/login-page";
 import { useAuth } from "../store/auth-context";
@@ -61,6 +62,7 @@ export function AppRoutes() {
         <Route element={<AppShell />}>
           <Route path="/agent/dashboard" element={<AgentDashboardPage />} />
           <Route path="/agent/sessions" element={<AgentSessionListPage />} />
+          <Route path="/agent/emails" element={<AgentEmailListPage />} />
           <Route path="/agent/interactions" element={<AdminContactsPage />} />
           <Route path="/agent/chat" element={<AgentChatWindowPage />} />
           <Route
