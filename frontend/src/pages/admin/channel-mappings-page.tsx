@@ -20,7 +20,12 @@ import type { ApiMeta } from "../../types/api";
 
 const PAGE_SIZE = 20;
 const CAMPAIGNS_FETCH_LIMIT = 100;
-const CHANNELS: ExternalChannel[] = ["whatsapp", "instagram", "messenger"];
+const CHANNELS: ExternalChannel[] = [
+  "whatsapp",
+  "instagram",
+  "messenger",
+  "gmail",
+];
 
 type MappingForm = {
   channel: ExternalChannel;
@@ -44,12 +49,14 @@ const initialForm: MappingForm = {
 function formatChannelLabel(channel: ExternalChannel) {
   if (channel === "whatsapp") return "WhatsApp";
   if (channel === "instagram") return "Instagram";
+  if (channel === "gmail") return "Gmail";
   return "Messenger";
 }
 
 function getChannelBadgeClass(channel: ExternalChannel) {
   if (channel === "whatsapp") return "status-badge channel-whatsapp";
   if (channel === "instagram") return "status-badge channel-instagram";
+  if (channel === "gmail") return "status-badge channel-gmail";
   return "status-badge channel-messenger";
 }
 
@@ -72,7 +79,8 @@ export function AdminChannelMappingsPage() {
       if (
         value === "whatsapp" ||
         value === "instagram" ||
-        value === "messenger"
+        value === "messenger" ||
+        value === "gmail"
       ) {
         return value;
       }
@@ -110,6 +118,14 @@ export function AdminChannelMappingsPage() {
   );
   const { creating, savingId, deleting, runCreate, runSave, runDelete } =
     useCrudActions();
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api/v1";
+  const gmailStatus = searchParams.get("gmail");
+  const gmailAuthorizeUrl = useMemo(() => {
+    const returnUrl = window.location.href;
+    const encoded = encodeURIComponent(returnUrl);
+    return `${apiBaseUrl}/gmail/oauth/authorize?returnUrl=${encoded}`;
+  }, [apiBaseUrl]);
 
   const campaignNameById = useMemo(() => {
     const lookup = new Map<string, string>();
@@ -224,6 +240,12 @@ export function AdminChannelMappingsPage() {
   useEffect(() => {
     void loadMappings();
   }, [loadMappings]);
+
+  useEffect(() => {
+    if (gmailStatus === "success") {
+      showSuccess("Gmail connected successfully");
+    }
+  }, [gmailStatus, showSuccess]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -426,8 +448,8 @@ export function AdminChannelMappingsPage() {
           <p className="eyebrow">Supervisor Console</p>
           <h1>Channel Mapping Management</h1>
           <p>
-            Map external account identifiers from WhatsApp, Instagram, and
-            Messenger into active campaigns for inbound routing.
+            Map external account identifiers from WhatsApp, Instagram,
+            Messenger, and Gmail into active campaigns for inbound routing.
           </p>
         </div>
         <div className="channel-mapping-hero-meta">
@@ -435,6 +457,13 @@ export function AdminChannelMappingsPage() {
           <span className="status-badge connected">
             {meta?.total ?? 0} mappings
           </span>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => window.location.assign(gmailAuthorizeUrl)}
+          >
+            Connect Gmail
+          </button>
         </div>
       </header>
 
@@ -493,7 +522,7 @@ export function AdminChannelMappingsPage() {
           <label>
             External Account ID
             <input
-              placeholder="phone_number_id / page_id / ig_business_id"
+              placeholder="phone_number_id / page_id / ig_business_id / gmail"
               value={createForm.externalAccountId}
               disabled={creating}
               onChange={(event) =>

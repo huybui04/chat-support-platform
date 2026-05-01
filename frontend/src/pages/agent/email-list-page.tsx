@@ -21,13 +21,8 @@ type RealtimeSocketState =
   | "connected"
   | "error";
 type SessionTab = "pending" | "active" | "completed";
-type ChatInboxChannelFilter = "all" | "whatsapp" | "instagram" | "messenger";
 
-const CHAT_INBOX_CHANNELS: ChatSession["channel"][] = [
-  "whatsapp",
-  "instagram",
-  "messenger",
-];
+const EMAIL_INBOX_CHANNEL = "gmail" as const;
 
 function formatDateTime(value: string | null): string {
   if (!value) {
@@ -61,7 +56,7 @@ function formatChannel(channel: ChatSession["channel"]): string {
   return "Web";
 }
 
-export function AgentSessionListPage() {
+export function AgentEmailListPage() {
   const { token } = useAuth();
   const { showSuccess } = useToast();
   const navigate = useNavigate();
@@ -85,8 +80,6 @@ export function AgentSessionListPage() {
       : "pending";
   });
   const [keyword, setKeyword] = useState("");
-  const [channelFilter, setChannelFilter] =
-    useState<ChatInboxChannelFilter>("all");
   const [error, setError] = useState("");
   const [busySessionId, setBusySessionId] = useState("");
   const [currentAgentId, setCurrentAgentId] = useState("");
@@ -113,9 +106,8 @@ export function AgentSessionListPage() {
         status: "pending",
         page: pendingPage,
         limit: PAGE_SIZE,
-        // Use team visibility for pending queue so agents receive sessions from campaigns assigned to their team
         visibilityScope: "team",
-        channels: CHAT_INBOX_CHANNELS,
+        channels: [EMAIL_INBOX_CHANNEL],
       });
 
       if (
@@ -149,7 +141,7 @@ export function AgentSessionListPage() {
         agentId: resolvedAgentId,
         page: activePage,
         limit: PAGE_SIZE,
-        channels: CHAT_INBOX_CHANNELS,
+        channels: [EMAIL_INBOX_CHANNEL],
       });
 
       if (
@@ -183,7 +175,7 @@ export function AgentSessionListPage() {
         agentId: resolvedAgentId,
         page: completedPage,
         limit: PAGE_SIZE,
-        channels: CHAT_INBOX_CHANNELS,
+        channels: [EMAIL_INBOX_CHANNEL],
       });
 
       if (
@@ -371,12 +363,11 @@ export function AgentSessionListPage() {
           .toLowerCase()
           .includes(normalizedKeyword);
 
-      const matchesChannel =
-        channelFilter === "all" || session.channel === channelFilter;
+      const matchesChannel = session.channel === "gmail";
 
       return matchesKeyword && matchesChannel;
     },
-    [channelFilter, normalizedKeyword],
+    [normalizedKeyword],
   );
 
   const filteredPendingItems = useMemo(() => {
@@ -398,7 +389,7 @@ export function AgentSessionListPage() {
       count: pendingMeta?.total ?? pendingItems.length,
       loading: pendingLoading,
       items: filteredPendingItems,
-      emptyText: "No pending sessions.",
+      emptyText: "No pending emails.",
       page: pendingPage,
       total: pendingMeta?.total,
       onPageChange: setPendingPage,
@@ -410,7 +401,7 @@ export function AgentSessionListPage() {
       count: activeMeta?.total ?? activeItems.length,
       loading: activeLoading,
       items: filteredActiveItems,
-      emptyText: "No active sessions.",
+      emptyText: "No active emails.",
       page: activePage,
       total: activeMeta?.total,
       onPageChange: setActivePage,
@@ -422,7 +413,7 @@ export function AgentSessionListPage() {
       count: completedMeta?.total ?? completedItems.length,
       loading: completedLoading,
       items: filteredCompletedItems,
-      emptyText: "No completed sessions.",
+      emptyText: "No completed emails.",
       page: completedPage,
       total: completedMeta?.total,
       onPageChange: setCompletedPage,
@@ -455,10 +446,10 @@ export function AgentSessionListPage() {
     <section className="placeholder-page agent-session-page">
       <div className="agent-session-hero">
         <div>
-          <h1>Chat Inbox</h1>
+          <h1>Email Inbox</h1>
           <p>
-            Prioritize pending chats, handle active sessions, and review
-            completed conversations in one workspace.
+            Prioritize pending emails, handle active email sessions, and review
+            completed email conversations in one workspace.
           </p>
         </div>
         <div className="agent-session-actions">
@@ -502,16 +493,8 @@ export function AgentSessionListPage() {
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
         />
-        <select
-          value={channelFilter}
-          onChange={(event) =>
-            setChannelFilter(event.target.value as ChatInboxChannelFilter)
-          }
-        >
-          <option value="all">All chat channels</option>
-          <option value="whatsapp">WhatsApp</option>
-          <option value="instagram">Instagram</option>
-          <option value="messenger">Messenger</option>
+        <select value={EMAIL_INBOX_CHANNEL} disabled>
+          <option value="gmail">Gmail</option>
         </select>
       </div>
 
@@ -535,25 +518,25 @@ export function AgentSessionListPage() {
       </div>
 
       {pendingLoading || activeLoading || completedLoading ? (
-        <p className="status-note">Refreshing sessions...</p>
+        <p className="status-note">Refreshing emails...</p>
       ) : null}
       {error ? <p className="error-note">{error}</p> : null}
 
       <section
         className="agent-session-board"
         role="tabpanel"
-        aria-label={`${currentTab.label} sessions`}
+        aria-label={`${currentTab.label} emails`}
       >
         {currentTab.loading ? (
           <p className="status-note">
-            Loading {currentTab.label.toLowerCase()} sessions...
+            Loading {currentTab.label.toLowerCase()} emails...
           </p>
         ) : null}
 
         {!currentTab.loading && currentTab.items.length === 0 ? (
           <p className="status-note">
-            {normalizedKeyword || channelFilter !== "all"
-              ? "No sessions matched your filters."
+            {normalizedKeyword
+              ? "No emails matched your filters."
               : currentTab.emptyText}
           </p>
         ) : null}
@@ -645,7 +628,7 @@ export function AgentSessionListPage() {
                     className="secondary"
                     onClick={() => navigate(`/agent/chat/${session.id}`)}
                   >
-                    Open Chat
+                    Open Email
                   </button>
                 </footer>
               </article>

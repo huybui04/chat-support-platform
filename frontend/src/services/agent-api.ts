@@ -9,12 +9,14 @@ export type ChatSession = {
   contactName?: string | null;
   agentId: string | null;
   agentName?: string | null;
-  channel: "web" | "whatsapp" | "instagram" | "messenger";
+  channel: "web" | "whatsapp" | "instagram" | "messenger" | "gmail";
   status: "pending" | "active" | "completed" | "abandoned";
   startedAt: string | null;
   endedAt: string | null;
   createdAt: string;
 };
+
+export type SessionDetails = ChatSession;
 
 export type ChatMessage = {
   id: string;
@@ -29,6 +31,7 @@ export type ChatMessage = {
 type GetSessionsInput = {
   status: ChatSession["status"];
   agentId?: string;
+  channels?: ChatSession["channel"][];
   page?: number;
   limit?: number;
   visibilityScope?: "team" | "agent";
@@ -49,6 +52,12 @@ export async function getSessions(
 
   if (input.agentId) {
     searchParams.set("agentId", input.agentId);
+  }
+
+  if (input.channels?.length) {
+    for (const channel of input.channels) {
+      searchParams.append("channels", channel);
+    }
   }
 
   searchParams.set("visibilityScope", visibilityScope);
@@ -79,6 +88,16 @@ export async function endSession(sessionId: string): Promise<ChatSession> {
       method: "POST",
       body: {},
     },
+  );
+
+  return response.data;
+}
+
+export async function getSessionById(
+  sessionId: string,
+): Promise<SessionDetails> {
+  const response = await apiRequest<ApiResponse<SessionDetails>>(
+    `/sessions/${sessionId}`,
   );
 
   return response.data;

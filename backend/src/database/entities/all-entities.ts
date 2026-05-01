@@ -20,6 +20,7 @@ import { ChatMessage } from './chat-message.entity';
 import { ChatSession } from './chat-session.entity';
 import { Contact } from './contact.entity';
 import { CsvImportLog } from './csv-import-log.entity';
+import { GmailAccount } from './gmail-account.entity';
 import { Team } from './team.entity';
 import { TeamMember } from './team-member.entity';
 import { User } from './user.entity';
@@ -37,4 +38,5 @@ export const ALL_ENTITIES = [
   ChatSession,
   ChatMessage,
   CsvImportLog,
+  GmailAccount,
 ];

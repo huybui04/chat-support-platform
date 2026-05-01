@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import {
@@ -21,7 +21,7 @@ import { SessionsService } from './sessions.service';
       User,
       CampaignContact,
     ]),
-    ChatModule,
+    forwardRef(() => ChatModule),
   ],
   controllers: [SessionsController],
   providers: [SessionsService],

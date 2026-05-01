@@ -6,6 +6,7 @@ export function AgentDashboardPage() {
   const {
     pendingSessions,
     assignedSessions,
+    completedSessions,
     metrics,
     connectionState,
     agentAvgHandlingSecondsMap,
@@ -39,6 +40,7 @@ export function AgentDashboardPage() {
   const teamRows = buildTeamRows(
     teamMembers,
     assignedSessions,
+    completedSessions,
     agentAvgHandlingSecondsMap,
   );
   const campaigns = buildCampaigns(pendingSessions, assignedSessions);
@@ -84,21 +86,18 @@ export function AgentDashboardPage() {
                     <th>Handled</th>
                     <th>Email Handling</th>
                     <th>Chat Handling</th>
-                    <th>Social Handling</th>
                     <th>Email Handled</th>
                     <th>Chat Handled</th>
-                    <th>Social Handled</th>
                     <th>Average Handling Time</th>
                     <th>Average chat handling time</th>
                     <th>Average email handling time</th>
-                    <th>Average social handling time</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!teamLoading && teamRows.length === 0 ? (
                     <tr>
-                      <td colSpan={13}>
+                      <td colSpan={10}>
                         <p className="status-note">No team members found.</p>
                       </td>
                     </tr>
@@ -108,15 +107,12 @@ export function AgentDashboardPage() {
                     <tr key={row.id}>
                       <td>{row.name}</td>
                       <td>{row.handled}</td>
-                      <td>-</td>
-                      <td>{row.handled}</td>
-                      <td>-</td>
-                      <td>0</td>
-                      <td>{row.handled}</td>
-                      <td>0</td>
+                      <td>{row.emailHandling}</td>
+                      <td>{row.chatHandling}</td>
+                      <td>{row.emailHandled}</td>
+                      <td>{row.chatHandled}</td>
                       <td>{row.avgHandlingTime}</td>
                       <td>{row.avgHandlingTime}</td>
-                      <td>-</td>
                       <td>-</td>
                       <td>
                         <span
@@ -173,7 +169,11 @@ type TeamRow = {
   id: string;
   name: string;
   handled: number;
+  emailHandling: number;
   avgHandlingTime: string;
+  chatHandling: number;
+  emailHandled: number;
+  chatHandled: number;
   isOnline: boolean;
 };
 
@@ -184,15 +184,26 @@ function buildTeamRows(
     agentId?: string | null;
     agentName?: string | null;
   }>,
+  completed: Array<{ id: string; agentId: string | null; channel: string }>,
   agentAvgMap: Record<string, number> = {},
 ): TeamRow[] {
   // Build a lookup of session counts per agentId
-  const sessionCountMap = new Map<string, number>();
+  const activeCountMap = new Map<string, number>();
+  const completedCountMap = new Map<string, number>();
   for (const session of sessions) {
     if (session.agentId) {
-      sessionCountMap.set(
+      activeCountMap.set(
         session.agentId,
-        (sessionCountMap.get(session.agentId) ?? 0) + 1,
+        (activeCountMap.get(session.agentId) ?? 0) + 1,
+      );
+    }
+  }
+
+  for (const session of completed) {
+    if (session.agentId) {
+      completedCountMap.set(
+        session.agentId,
+        (completedCountMap.get(session.agentId) ?? 0) + 1,
       );
     }
   }
@@ -200,8 +211,12 @@ function buildTeamRows(
   return members.map((member) => ({
     id: member.id,
     name: member.fullName,
-    handled: sessionCountMap.get(member.id) ?? 0,
+    handled: completedCountMap.get(member.id) ?? 0,
+    emailHandling: 0,
     avgHandlingTime: formatDuration(agentAvgMap[member.id] ?? 0),
+    chatHandling: activeCountMap.get(member.id) ?? 0,
+    emailHandled: 0,
+    chatHandled: completedCountMap.get(member.id) ?? 0,
     isOnline: member.isOnline,
   }));
 }

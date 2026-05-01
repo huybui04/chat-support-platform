@@ -11,6 +11,7 @@ import {
   getCampaignAgents,
   getCampaignTeams,
   getChannelMappings,
+  getGmailAccounts,
   getTeams,
   removeCampaignAgent,
   removeCampaignTeam,
@@ -19,6 +20,7 @@ import {
   type CampaignTeamAssignment,
   type ChannelMapping,
   type ExternalChannel,
+  type GmailAccountSummary,
   type Team,
   type User,
 } from "../../services/admin-api";
@@ -54,10 +56,11 @@ export function AdminCampaignDetailPage() {
 
   const [mappings, setMappings] = useState<ChannelMapping[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(true);
+  const [gmailAccounts, setGmailAccounts] = useState<GmailAccountSummary[]>([]);
+  const [loadingGmailAccounts, setLoadingGmailAccounts] = useState(true);
   const [creatingMapping, setCreatingMapping] = useState(false);
   const [deletingMappingId, setDeletingMappingId] = useState("");
   const [mappingForm, setMappingForm] = useState({
-    channel: "whatsapp" as ExternalChannel,
     externalAccountId: "",
     priority: 1,
     isActive: true,
@@ -65,6 +68,10 @@ export function AdminCampaignDetailPage() {
 
   const inboundOrOutbound =
     campaign?.type === "inbound" ? "Inbound" : "Outbound";
+  const mappingChannel = campaign?.channel ?? "web";
+  const isGmailMapping = mappingChannel === "gmail";
+  const isMappingSupported = mappingChannel !== "web";
+  const hasGmailAccount = gmailAccounts.length > 0;
 
   const loadCampaign = useCallback(async () => {
     if (!campaignId) {
@@ -168,17 +175,42 @@ export function AdminCampaignDetailPage() {
     }
   }, [campaignId, showError]);
 
+  const loadGmailAccounts = useCallback(async () => {
+    setLoadingGmailAccounts(true);
+    try {
+      const accounts = await getGmailAccounts();
+      setGmailAccounts(accounts);
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load Gmail accounts",
+      );
+    } finally {
+      setLoadingGmailAccounts(false);
+    }
+  }, [showError]);
+
   useEffect(() => {
     void loadCampaign();
     void loadUsersTabData();
     void loadTeamsTabData();
     void loadConfigurationsTabData();
+    void loadGmailAccounts();
   }, [
     loadCampaign,
     loadConfigurationsTabData,
+    loadGmailAccounts,
     loadTeamsTabData,
     loadUsersTabData,
   ]);
+
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api/v1";
+  const gmailAuthorizeUrl = useMemo(() => {
+    const returnUrl = window.location.href;
+    return `${apiBaseUrl}/gmail/oauth/authorize?returnUrl=${encodeURIComponent(returnUrl)}`;
+  }, [apiBaseUrl]);
 
   const handleAssignAgent = async () => {
     if (!campaignId || !selectedAgentId) {
@@ -262,10 +294,20 @@ export function AdminCampaignDetailPage() {
       return;
     }
 
+    if (!isMappingSupported) {
+      showError("Channel mappings are not supported for web campaigns");
+      return;
+    }
+
+    if (isGmailMapping && !hasGmailAccount) {
+      showError("Connect Gmail before saving a Gmail mapping");
+      return;
+    }
+
     setCreatingMapping(true);
     try {
       await createChannelMapping({
-        channel: mappingForm.channel,
+        channel: mappingChannel as ExternalChannel,
         externalAccountId: mappingForm.externalAccountId.trim(),
         campaignId,
         priority: mappingForm.priority,
@@ -551,125 +593,143 @@ export function AdminCampaignDetailPage() {
           ) : null}
 
           {activeTab === "configurations" ? (
-            <div className="data-panel campaign-detail-tab-panel">
-              <div className="campaign-detail-toolbar">
-                <h3>Channel Mappings</h3>
-                <div className="campaign-detail-toolbar-actions">
-                  <select
-                    value={mappingForm.channel}
-                    disabled={creatingMapping}
-                    onChange={(event) =>
-                      setMappingForm((prev) => ({
-                        ...prev,
-                        channel: event.target.value as ExternalChannel,
-                      }))
-                    }
-                  >
-                    <option value="whatsapp">whatsapp</option>
-                    <option value="instagram">instagram</option>
-                    <option value="messenger">messenger</option>
-                  </select>
-                  <input
-                    className="campaign-detail-inline-input"
-                    placeholder="External account id"
-                    value={mappingForm.externalAccountId}
-                    disabled={creatingMapping}
-                    onChange={(event) =>
-                      setMappingForm((prev) => ({
-                        ...prev,
-                        externalAccountId: event.target.value,
-                      }))
-                    }
-                  />
-                  <input
-                    className="campaign-detail-inline-input campaign-detail-inline-input-sm"
-                    type="number"
-                    min={1}
-                    value={mappingForm.priority}
-                    disabled={creatingMapping}
-                    onChange={(event) =>
-                      setMappingForm((prev) => ({
-                        ...prev,
-                        priority: Math.max(1, Number(event.target.value || 1)),
-                      }))
-                    }
-                  />
-                  <label className="checkbox-field">
+            <>
+              <div className="data-panel campaign-detail-tab-panel">
+                <div className="campaign-detail-toolbar">
+                  <h3>Channel Mappings</h3>
+                  <div className="campaign-detail-toolbar-actions">
                     <input
-                      type="checkbox"
-                      checked={mappingForm.isActive}
-                      disabled={creatingMapping}
+                      className="campaign-detail-inline-input"
+                      placeholder={
+                        isGmailMapping ? "Gmail address" : "External account id"
+                      }
+                      value={mappingForm.externalAccountId}
+                      disabled={creatingMapping || !isMappingSupported}
                       onChange={(event) =>
                         setMappingForm((prev) => ({
                           ...prev,
-                          isActive: event.target.checked,
+                          externalAccountId: event.target.value,
                         }))
                       }
                     />
-                    Active
-                  </label>
-                  <button
-                    type="button"
-                    disabled={creatingMapping}
-                    onClick={() => void handleCreateMapping()}
-                  >
-                    {creatingMapping ? "Creating..." : "Add Configuration"}
-                  </button>
+                    <input
+                      className="campaign-detail-inline-input campaign-detail-inline-input-sm"
+                      type="number"
+                      min={1}
+                      value={mappingForm.priority}
+                      disabled={creatingMapping || !isMappingSupported}
+                      onChange={(event) =>
+                        setMappingForm((prev) => ({
+                          ...prev,
+                          priority: Math.max(
+                            1,
+                            Number(event.target.value || 1),
+                          ),
+                        }))
+                      }
+                    />
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={mappingForm.isActive}
+                        disabled={creatingMapping || !isMappingSupported}
+                        onChange={(event) =>
+                          setMappingForm((prev) => ({
+                            ...prev,
+                            isActive: event.target.checked,
+                          }))
+                        }
+                      />
+                      Active
+                    </label>
+                    {isGmailMapping ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() =>
+                          window.location.assign(gmailAuthorizeUrl)
+                        }
+                      >
+                        Connect Gmail
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={
+                        creatingMapping ||
+                        !isMappingSupported ||
+                        (isGmailMapping &&
+                          (loadingGmailAccounts || !hasGmailAccount))
+                      }
+                      onClick={() => void handleCreateMapping()}
+                    >
+                      {creatingMapping ? "Saving..." : "Save"}
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {loadingMappings ? (
-                <p className="status-note">Loading configurations...</p>
-              ) : null}
+                {!isMappingSupported ? (
+                  <p className="status-note">
+                    Channel mappings are only available for external channels
+                    (gmail, whatsapp, instagram, messenger).
+                  </p>
+                ) : null}
 
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Channel</th>
-                    <th>External Account ID</th>
-                    <th>Priority</th>
-                    <th>Active</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!loadingMappings && mappings.length === 0 ? (
+                {loadingMappings ? (
+                  <p className="status-note">Loading configurations...</p>
+                ) : null}
+
+                <table className="data-table">
+                  <thead>
                     <tr>
-                      <td colSpan={5}>
-                        <p className="status-note">No configurations found.</p>
-                      </td>
+                      <th>Channel</th>
+                      <th>External Account ID</th>
+                      <th>Priority</th>
+                      <th>Active</th>
+                      <th>Actions</th>
                     </tr>
-                  ) : null}
+                  </thead>
+                  <tbody>
+                    {!loadingMappings && mappings.length === 0 ? (
+                      <tr>
+                        <td colSpan={5}>
+                          <p className="status-note">
+                            No configurations found.
+                          </p>
+                        </td>
+                      </tr>
+                    ) : null}
 
-                  {mappings.map((mapping) => (
-                    <tr key={mapping.id}>
-                      <td>
-                        <span
-                          className={`status-badge channel-${mapping.channel}`}
-                        >
-                          {mapping.channel}
-                        </span>
-                      </td>
-                      <td>{mapping.externalAccountId}</td>
-                      <td>{mapping.priority}</td>
-                      <td>{mapping.isActive ? "Yes" : "No"}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="danger"
-                          disabled={deletingMappingId === mapping.id}
-                          onClick={() => void handleDeleteMapping(mapping.id)}
-                        >
-                          {deletingMappingId === mapping.id
-                            ? "Removing..."
-                            : "Remove"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    {mappings.map((mapping) => (
+                      <tr key={mapping.id}>
+                        <td>
+                          <span
+                            className={`status-badge channel-${mapping.channel}`}
+                          >
+                            {mapping.channel}
+                          </span>
+                        </td>
+                        <td>{mapping.externalAccountId}</td>
+                        <td>{mapping.priority}</td>
+                        <td>{mapping.isActive ? "Yes" : "No"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={deletingMappingId === mapping.id}
+                            onClick={() => void handleDeleteMapping(mapping.id)}
+                          >
+                            {deletingMappingId === mapping.id
+                              ? "Removing..."
+                              : "Remove"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : null}
         </div>
       </div>

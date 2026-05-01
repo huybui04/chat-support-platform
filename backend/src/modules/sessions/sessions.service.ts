@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +16,7 @@ import {
   ChatMessage,
   ChatSession,
   ChatSessionStatus,
+  SessionChannel,
   User,
   UserRole,
 } from '../../database/entities';
@@ -39,6 +42,7 @@ export class SessionsService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(CampaignContact)
     private readonly campaignContactsRepository: Repository<CampaignContact>,
+    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
   ) {}
 
@@ -76,6 +80,12 @@ export class SessionsService {
     if (query.agentId) {
       qb.andWhere('session.agentId = :agentId', {
         agentId: query.agentId,
+      });
+    }
+
+    if (query.channels?.length) {
+      qb.andWhere('session.channel IN (:...channels)', {
+        channels: query.channels,
       });
     }
 

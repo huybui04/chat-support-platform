@@ -35,7 +35,7 @@ export type Campaign = {
   name: string;
   description: string | null;
   status: "draft" | "active" | "paused" | "completed";
-  channel: "web" | "whatsapp" | "instagram" | "messenger";
+  channel: "web" | "whatsapp" | "instagram" | "messenger" | "gmail";
   type: "inbound" | "outbound";
   startDate: string | null;
   endDate: string | null;
@@ -84,14 +84,14 @@ export type InteractionSession = {
   contactName?: string | null;
   agentId: string | null;
   agentName?: string | null;
-  channel: "web" | "whatsapp" | "instagram" | "messenger";
+  channel: "web" | "whatsapp" | "instagram" | "messenger" | "gmail";
   status: "pending" | "active" | "completed" | "abandoned";
   startedAt: string | null;
   endedAt: string | null;
   createdAt: string;
 };
 
-export type ExternalChannel = "whatsapp" | "instagram" | "messenger";
+export type ExternalChannel = "whatsapp" | "instagram" | "messenger" | "gmail";
 
 export type ChannelMapping = {
   id: string;
@@ -268,6 +268,15 @@ export type CampaignTeamAssignment = {
   team?: Team;
 };
 
+export type GmailAccountSummary = {
+  id: string;
+  email: string;
+  historyId: string | null;
+  watchExpiration: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export async function getCampaigns(
   query: PaginationQuery = {},
 ): Promise<PaginatedResult<Campaign>> {
@@ -391,6 +400,12 @@ export async function getCampaignTeams(campaignId: string) {
   const response = await apiRequest<ApiResponse<CampaignTeamAssignment[]>>(
     `/campaigns/${campaignId}/teams`,
   );
+  return response.data;
+}
+
+export async function getGmailAccounts(): Promise<GmailAccountSummary[]> {
+  const response =
+    await apiRequest<ApiResponse<GmailAccountSummary[]>>(`/gmail/accounts`);
   return response.data;
 }
 

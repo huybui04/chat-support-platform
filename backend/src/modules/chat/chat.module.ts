@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import {
@@ -9,6 +9,7 @@ import {
 } from '../../database/entities';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
+import { GmailModule } from '../gmail/gmail.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ChatService } from './chat.service';
       Campaign,
       ChannelCampaignMapping,
     ]),
+    forwardRef(() => GmailModule),
   ],
   providers: [ChatGateway, ChatService],
   exports: [ChatService, ChatGateway],

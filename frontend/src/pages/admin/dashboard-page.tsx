@@ -196,6 +196,7 @@ export function AdminDashboardPage() {
             <option value="whatsapp">WhatsApp</option>
             <option value="instagram">Instagram</option>
             <option value="messenger">Messenger</option>
+            <option value="gmail">Gmail</option>
           </select>
         </label>
       </div>

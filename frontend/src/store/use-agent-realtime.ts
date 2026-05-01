@@ -31,6 +31,9 @@ export function useAgentRealtime() {
   const [assignedSessions, setAssignedSessions] = useState<
     SessionAssignedPayload[]
   >([]);
+  const [completedSessions, setCompletedSessions] = useState<
+    Array<{ id: string; agentId: string | null; channel: string }>
+  >([]);
   const [agentStatuses, setAgentStatuses] = useState<Record<string, boolean>>(
     {},
   );
@@ -96,6 +99,14 @@ export function useAgentRealtime() {
           agentId: item.agentId,
           agentName: item.agentName,
           campaignName: item.campaignName,
+        })),
+      );
+
+      setCompletedSessions(
+        completedResult.items.map((item) => ({
+          id: item.id,
+          agentId: item.agentId ?? null,
+          channel: item.channel,
         })),
       );
 
@@ -286,6 +297,7 @@ export function useAgentRealtime() {
     connectionState,
     pendingSessions,
     assignedSessions,
+    completedSessions,
     metrics,
     agentAvgHandlingSecondsMap,
     logs,
