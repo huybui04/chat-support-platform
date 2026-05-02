@@ -9,6 +9,8 @@ export type ChatSession = {
   contactName?: string | null;
   agentId: string | null;
   agentName?: string | null;
+  contactEmail?: string | null;
+  agentEmail?: string | null;
   channel: "web" | "whatsapp" | "instagram" | "messenger" | "gmail";
   status: "pending" | "active" | "completed" | "abandoned";
   startedAt: string | null;
@@ -24,6 +26,7 @@ export type ChatMessage = {
   senderType: "agent" | "customer" | "system";
   senderId: string | null;
   content: string;
+  subject?: string | null;
   messageType: "text" | "image" | "file" | "system";
   createdAt: string;
 };

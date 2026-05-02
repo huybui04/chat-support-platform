@@ -7,9 +7,11 @@ export function AgentDashboardPage() {
     pendingSessions,
     assignedSessions,
     completedSessions,
+    activeEmailSessions,
     metrics,
     connectionState,
     agentAvgHandlingSecondsMap,
+    agentEmailAvgHandlingSecondsMap,
   } = useAgentRealtime();
 
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
@@ -41,7 +43,9 @@ export function AgentDashboardPage() {
     teamMembers,
     assignedSessions,
     completedSessions,
+    activeEmailSessions,
     agentAvgHandlingSecondsMap,
+    agentEmailAvgHandlingSecondsMap,
   );
   const campaigns = buildCampaigns(pendingSessions, assignedSessions);
 
@@ -113,7 +117,7 @@ export function AgentDashboardPage() {
                       <td>{row.chatHandled}</td>
                       <td>{row.avgHandlingTime}</td>
                       <td>{row.avgHandlingTime}</td>
-                      <td>-</td>
+                      <td>{row.avgEmailHandlingTime}</td>
                       <td>
                         <span
                           className={`status-badge ${row.isOnline ? "online" : "offline"}`}
@@ -174,6 +178,7 @@ type TeamRow = {
   chatHandling: number;
   emailHandled: number;
   chatHandled: number;
+  avgEmailHandlingTime: string;
   isOnline: boolean;
 };
 
@@ -183,13 +188,19 @@ function buildTeamRows(
     id: string;
     agentId?: string | null;
     agentName?: string | null;
+    channel?: string;
   }>,
   completed: Array<{ id: string; agentId: string | null; channel: string }>,
+  emailSessions: Array<{ id: string; agentId: string | null }>,
   agentAvgMap: Record<string, number> = {},
+  agentEmailAvgMap: Record<string, number> = {},
 ): TeamRow[] {
   // Build a lookup of session counts per agentId
   const activeCountMap = new Map<string, number>();
   const completedCountMap = new Map<string, number>();
+  const activeEmailCountMap = new Map<string, number>();
+  const completedEmailCountMap = new Map<string, number>();
+
   for (const session of sessions) {
     if (session.agentId) {
       activeCountMap.set(
@@ -205,6 +216,22 @@ function buildTeamRows(
         session.agentId,
         (completedCountMap.get(session.agentId) ?? 0) + 1,
       );
+      // Count completed email sessions
+      if (session.channel === "gmail") {
+        completedEmailCountMap.set(
+          session.agentId,
+          (completedEmailCountMap.get(session.agentId) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  for (const emailSession of emailSessions) {
+    if (emailSession.agentId) {
+      activeEmailCountMap.set(
+        emailSession.agentId,
+        (activeEmailCountMap.get(emailSession.agentId) ?? 0) + 1,
+      );
     }
   }
 
@@ -212,11 +239,12 @@ function buildTeamRows(
     id: member.id,
     name: member.fullName,
     handled: completedCountMap.get(member.id) ?? 0,
-    emailHandling: 0,
+    emailHandling: activeEmailCountMap.get(member.id) ?? 0,
     avgHandlingTime: formatDuration(agentAvgMap[member.id] ?? 0),
     chatHandling: activeCountMap.get(member.id) ?? 0,
-    emailHandled: 0,
+    emailHandled: completedEmailCountMap.get(member.id) ?? 0,
     chatHandled: completedCountMap.get(member.id) ?? 0,
+    avgEmailHandlingTime: formatDuration(agentEmailAvgMap[member.id] ?? 0),
     isOnline: member.isOnline,
   }));
 }

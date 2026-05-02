@@ -2,6 +2,7 @@ export type SessionPendingPayload = {
   id: string;
   status: string;
   campaignName?: string | null;
+  channel?: string;
 };
 
 export type SessionAssignedPayload = {
@@ -9,6 +10,7 @@ export type SessionAssignedPayload = {
   agentId: string | null;
   agentName?: string | null;
   campaignName?: string | null;
+  channel?: string;
 };
 
 export type AgentStatusChanged = {

@@ -149,7 +149,10 @@ export class SessionsService {
   }
 
   async findById(id: string): Promise<ChatSession> {
-    const session = await this.sessionsRepository.findOne({ where: { id } });
+    const session = await this.sessionsRepository.findOne({
+      where: { id },
+      relations: ['campaign', 'contact', 'agent'],
+    });
     if (!session) {
       throw new NotFoundException('Session not found');
     }
