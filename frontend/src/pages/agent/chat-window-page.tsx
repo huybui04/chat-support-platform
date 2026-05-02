@@ -6,7 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { Socket } from "socket.io-client";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import {
   endSession,
@@ -65,6 +65,7 @@ function formatEmailAddress(value?: string | null, fallback = "-") {
 
 export function AgentChatWindowPage() {
   const params = useParams();
+  const navigate = useNavigate();
   const { token } = useAuth();
   const { showError, showSuccess } = useToast();
 
@@ -303,6 +304,9 @@ export function AgentChatWindowPage() {
       return;
     }
     socketRef.current.emit("leave_session", { sessionId: selectedSessionId });
+    // Navigate back to the appropriate inbox
+    const inboxPath = gmailMode ? "/agent/emails" : "/agent/sessions";
+    navigate(inboxPath);
   };
 
   useEffect(() => {
@@ -475,6 +479,10 @@ export function AgentChatWindowPage() {
     try {
       await endSession(selectedSessionId);
       showSuccess("Session ended");
+      setSession((prev) => (prev ? { ...prev, status: "completed" } : null));
+      // Navigate back to the appropriate inbox
+      const inboxPath = gmailMode ? "/agent/emails" : "/agent/sessions";
+      navigate(inboxPath);
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -582,25 +590,26 @@ export function AgentChatWindowPage() {
               const isEmail = gmailMode;
               const previousMessage = messages[index - 1];
               const emailSubject =
+                message.subject?.trim() ||
                 session?.campaignName?.trim() ||
                 (index === 0
                   ? `Re: ${message.content.slice(0, 24)}`
                   : `Re: ${session?.contactName ?? "message"}`);
               const fromAddress =
                 message.senderType === "agent"
-                  ? formatEmailAddress(session?.agentName, "You")
+                  ? formatEmailAddress(session?.agentEmail ?? session?.agentName, "You")
                   : formatEmailAddress(
-                      session?.contactName,
+                      session?.contactEmail ?? session?.contactName,
                       "customer@unknown.com",
                     );
               const toAddress =
                 message.senderType === "agent"
                   ? formatEmailAddress(
-                      session?.contactName,
+                      session?.contactEmail ?? session?.contactName,
                       "customer@unknown.com",
                     )
                   : formatEmailAddress(
-                      session?.agentName,
+                      session?.agentEmail ?? session?.agentName,
                       "support@company.com",
                     );
 
@@ -678,33 +687,41 @@ export function AgentChatWindowPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div
-            className={`agent-chat-composer ${gmailMode ? "agent-email-composer" : ""}`}
-          >
-            <textarea
-              value={draft}
-              onChange={(event) => onDraftChange(event.target.value)}
-              onKeyDown={onDraftKeyDown}
-              rows={gmailMode ? 5 : 3}
-              placeholder={
-                gmailMode ? "Reply to this email..." : "Type message..."
-              }
-            />
-            <div className="agent-chat-composer-actions">
-              <small>
-                {gmailMode
-                  ? "Enter to send, Shift + Enter for new line"
-                  : "Enter to send, Shift + Enter for new line"}
-              </small>
-              <button
-                type="button"
-                onClick={sendMessage}
-                disabled={!draft.trim()}
-              >
-                {gmailMode ? "Send Email" : "Send Message"}
-              </button>
+          {session?.status === "completed" ? (
+            <div className="agent-chat-composer-disabled">
+              <p className="status-note">
+                This session is completed and read-only.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div
+              className={`agent-chat-composer ${gmailMode ? "agent-email-composer" : ""}`}
+            >
+              <textarea
+                value={draft}
+                onChange={(event) => onDraftChange(event.target.value)}
+                onKeyDown={onDraftKeyDown}
+                rows={gmailMode ? 5 : 3}
+                placeholder={
+                  gmailMode ? "Reply to this email..." : "Type message..."
+                }
+              />
+              <div className="agent-chat-composer-actions">
+                <small>
+                  {gmailMode
+                    ? "Enter to send, Shift + Enter for new line"
+                    : "Enter to send, Shift + Enter for new line"}
+                </small>
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  disabled={!draft.trim()}
+                >
+                  {gmailMode ? "Send Email" : "Send Message"}
+                </button>
+              </div>
+            </div>
+          )}
         </article>
       </section>
     </section>

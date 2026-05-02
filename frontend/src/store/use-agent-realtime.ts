@@ -34,6 +34,9 @@ export function useAgentRealtime() {
   const [completedSessions, setCompletedSessions] = useState<
     Array<{ id: string; agentId: string | null; channel: string }>
   >([]);
+  const [activeEmailSessions, setActiveEmailSessions] = useState<
+    Array<{ id: string; agentId: string | null }>
+  >([]);
   const [agentStatuses, setAgentStatuses] = useState<Record<string, boolean>>(
     {},
   );
@@ -42,6 +45,8 @@ export function useAgentRealtime() {
   const [agentAvgHandlingSecondsMap, setAgentAvgHandlingSecondsMap] = useState<
     Record<string, number>
   >({});
+  const [agentEmailAvgHandlingSecondsMap, setAgentEmailAvgHandlingSecondsMap] =
+    useState<Record<string, number>>({});
   const [logs, setLogs] = useState<RealtimeLogItem[]>([]);
 
   const socketRef = useRef<Socket | null>(null);
@@ -99,6 +104,7 @@ export function useAgentRealtime() {
           agentId: item.agentId,
           agentName: item.agentName,
           campaignName: item.campaignName,
+          channel: item.channel,
         })),
       );
 
@@ -108,6 +114,16 @@ export function useAgentRealtime() {
           agentId: item.agentId ?? null,
           channel: item.channel,
         })),
+      );
+
+      // Track active email sessions
+      setActiveEmailSessions(
+        assignedResult.items
+          .filter((item) => item.channel === "gmail")
+          .map((item) => ({
+            id: item.id,
+            agentId: item.agentId,
+          })),
       );
 
       setAgentStatuses(() => {
@@ -125,6 +141,10 @@ export function useAgentRealtime() {
         const durations: number[] = [];
         const perAgentAcc: Record<string, { total: number; count: number }> =
           {};
+        const perAgentEmailAcc: Record<
+          string,
+          { total: number; count: number }
+        > = {};
 
         for (const s of completedResult.items) {
           if (!s.startedAt || !s.endedAt) continue;
@@ -139,6 +159,17 @@ export function useAgentRealtime() {
             acc.total += seconds;
             acc.count += 1;
             perAgentAcc[s.agentId] = acc;
+
+            // Track email sessions separately
+            if (s.channel === "gmail") {
+              const emailAcc = perAgentEmailAcc[s.agentId] ?? {
+                total: 0,
+                count: 0,
+              };
+              emailAcc.total += seconds;
+              emailAcc.count += 1;
+              perAgentEmailAcc[s.agentId] = emailAcc;
+            }
           }
         }
 
@@ -152,13 +183,21 @@ export function useAgentRealtime() {
             acc.count > 0 ? Math.round(acc.total / acc.count) : 0;
         }
 
+        const perAgentEmailAvgMap: Record<string, number> = {};
+        for (const [agentId, acc] of Object.entries(perAgentEmailAcc)) {
+          perAgentEmailAvgMap[agentId] =
+            acc.count > 0 ? Math.round(acc.total / acc.count) : 0;
+        }
+
         setTotalHandlingSeconds(total);
         setAvgHandlingSeconds(avg);
         setAgentAvgHandlingSecondsMap(perAgentAvgMap);
+        setAgentEmailAvgHandlingSecondsMap(perAgentEmailAvgMap);
       } catch (err) {
         setTotalHandlingSeconds(0);
         setAvgHandlingSeconds(0);
         setAgentAvgHandlingSecondsMap({});
+        setAgentEmailAvgHandlingSecondsMap({});
       }
 
       pushLog("snapshot_loaded", {
@@ -251,6 +290,21 @@ export function useAgentRealtime() {
         setPendingSessions((current) =>
           current.filter((item) => item.id !== payload.session.id),
         );
+        // Track email sessions if it's a Gmail session
+        if (payload.session.channel === "gmail" && payload.session.agentId) {
+          setActiveEmailSessions((current) => {
+            const withoutCurrent = current.filter(
+              (item) => item.id !== payload.session.id,
+            );
+            return [
+              {
+                id: payload.session.id,
+                agentId: payload.session.agentId,
+              },
+              ...withoutCurrent,
+            ].slice(0, 50);
+          });
+        }
         pushLog("session_assigned", payload);
       },
     );
@@ -298,8 +352,10 @@ export function useAgentRealtime() {
     pendingSessions,
     assignedSessions,
     completedSessions,
+    activeEmailSessions,
     metrics,
     agentAvgHandlingSecondsMap,
+    agentEmailAvgHandlingSecondsMap,
     logs,
     connect,
     disconnect,

@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 
 import {
   Campaign,
@@ -69,6 +69,7 @@ type GmailMessage = {
   id: string;
   threadId?: string;
   snippet?: string;
+  labelIds?: string[];
   payload?: {
     headers?: Array<{ name: string; value: string }>;
     body?: { data?: string };
@@ -266,16 +267,42 @@ export class GmailService {
     }
 
     const accessToken = await this.getAccessToken(account);
-    const subject = `Support reply - ${campaign.name}`;
+
+    // Find the original inbound message to get Gmail message ID and thread ID for proper threading
+    const originalMessage = await this.messagesRepository.findOne({
+      where: {
+        sessionId: session.id,
+        senderType: MessageSenderType.CUSTOMER,
+        externalMessageId: Not(IsNull()),
+      },
+      order: { createdAt: 'ASC' },
+    });
+
+    // Use the original subject from the inbound email, or create a new one
+    let subject = `Support reply - ${campaign.name}`;
+    let replyToMessageId: string | null | undefined;
+    let replyThreadId: string | null | undefined;
+
+    if (originalMessage?.externalMessageId) {
+      // Use original subject and prepend Re: if not present
+      const origSubj = originalMessage.subject || `Support reply - ${campaign.name}`;
+      subject = origSubj.toLowerCase().startsWith('re:') ? origSubj : `Re: ${origSubj}`;
+      replyToMessageId = originalMessage.rfcMessageId as string | null;
+      replyThreadId = originalMessage.externalThreadId as string | null;
+    }
 
     const rawMessage = buildRawEmail({
       to: recipientEmail,
       subject,
       body: content,
+      inReplyTo: replyToMessageId ?? undefined,
+      references: replyToMessageId ?? undefined,
     });
 
     const response = await fetch(
-      'https://www.googleapis.com/gmail/v1/users/me/messages/send',
+      replyThreadId
+        ? `https://www.googleapis.com/gmail/v1/users/me/messages/send?threadId=${encodeURIComponent(String(replyThreadId))}`
+        : 'https://www.googleapis.com/gmail/v1/users/me/messages/send',
       {
         method: 'POST',
         headers: {
@@ -288,7 +315,7 @@ export class GmailService {
 
     if (response.ok) {
       this.logger.debug(
-        `Gmail outbound success for session=${session.id} to=${recipientEmail}`,
+        `Gmail outbound success for session=${session.id} to=${recipientEmail} threadId=${replyThreadId ?? 'N/A'}`,
       );
       return;
     }
@@ -577,9 +604,14 @@ export class GmailService {
     account: GmailAccount,
     message: GmailMessage,
   ) {
+    if (!isPrimaryInboxMessage(message)) {
+      return false;
+    }
+
     const headers = message.payload?.headers ?? [];
     const fromHeader = findHeader(headers, 'From');
     const subjectHeader = findHeader(headers, 'Subject');
+    const messageIdHeader = findHeader(headers, 'Message-ID');
     const fromInfo = parseEmailContact(fromHeader);
 
     if (!fromInfo.email) {
@@ -643,7 +675,11 @@ export class GmailService {
         content: bodyText,
         messageType: MessageType.TEXT,
         attachmentUrl: null,
+        externalMessageId: message.id,
+        externalThreadId: message.threadId ?? null,
+        rfcMessageId: messageIdHeader || null,
         isRead: false,
+        subject: subjectHeader || null,
       }),
     );
 
@@ -856,6 +892,30 @@ export class GmailService {
   }
 }
 
+function isPrimaryInboxMessage(message: GmailMessage) {
+  const labels = message.labelIds ?? [];
+  if (labels.length === 0) {
+    return false;
+  }
+
+  if (!labels.includes('INBOX')) {
+    return false;
+  }
+
+  if (!labels.includes('CATEGORY_PERSONAL')) {
+    return false;
+  }
+
+  const excludedCategories = [
+    'CATEGORY_PROMOTIONS',
+    'CATEGORY_SOCIAL',
+    'CATEGORY_UPDATES',
+    'CATEGORY_FORUMS',
+  ];
+
+  return !excludedCategories.some((label) => labels.includes(label));
+}
+
 function encodeState(payload: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(payload))
     .toString('base64')
@@ -948,7 +1008,7 @@ function parseEmailContact(raw?: string) {
   };
 }
 
-function extractBodyText(payload?: GmailMessage['payload']) {
+function extractBodyText(payload?: GmailMessage['payload']): string {
   if (!payload) {
     return '';
   }
@@ -958,7 +1018,7 @@ function extractBodyText(payload?: GmailMessage['payload']) {
   }
 
   for (const part of payload.parts ?? []) {
-    const text = extractBodyText(part);
+    const text: string = extractBodyText(part);
     if (text) {
       return text;
     }
@@ -967,11 +1027,19 @@ function extractBodyText(payload?: GmailMessage['payload']) {
   return '';
 }
 
-function buildRawEmail(input: { to: string; subject: string; body: string }) {
+function buildRawEmail(input: {
+  to: string;
+  subject: string;
+  body: string;
+  inReplyTo?: string | null;
+  references?: string | null;
+}) {
   const lines = [
     `To: ${input.to}`,
     `Subject: ${input.subject}`,
     'Content-Type: text/plain; charset=utf-8',
+    ...(input.inReplyTo ? [`In-Reply-To: ${input.inReplyTo}`] : []),
+    ...(input.references ? [`References: ${input.references}`] : []),
     '',
     input.body,
   ];

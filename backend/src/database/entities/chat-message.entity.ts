@@ -58,6 +58,38 @@ export class ChatMessage {
   })
   attachmentUrl: string | null;
 
+  @Column({
+    name: 'external_message_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  externalMessageId: string | null;
+
+  @Column({
+    name: 'rfc_message_id',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  rfcMessageId: string | null;
+
+  @Column({
+    name: 'external_thread_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  externalThreadId: string | null;
+
+  @Column({
+    name: 'subject',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  subject: string | null;
+
   @Column({ name: 'is_read', type: 'boolean', default: false })
   isRead: boolean;
 

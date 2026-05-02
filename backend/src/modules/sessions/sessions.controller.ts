@@ -29,7 +29,15 @@ export class SessionsController {
   @Get(':id')
   async findById(@Param('id') id: string) {
     const session = await this.sessionsService.findById(id);
-    return apiSuccess(session);
+    const { campaign, contact, agent, ...base } = session;
+    return apiSuccess({
+      ...base,
+      campaignName: campaign?.name ?? null,
+      contactName: contact?.fullName ?? null,
+      contactEmail: contact?.email ?? null,
+      agentName: agent?.fullName ?? null,
+      agentEmail: agent?.email ?? null,
+    });
   }
 
   @Post()
