@@ -118,9 +118,11 @@ export class ChannelMappingsService {
   }
 
   async remove(id: string): Promise<void> {
-    const mapping = await this.findById(id);
-    mapping.isActive = false;
-    await this.mappingsRepository.save(mapping);
+    const result = await this.mappingsRepository.delete({ id });
+
+    if (!result.affected) {
+      throw new NotFoundException('Channel mapping not found');
+    }
   }
 
   private async ensureCampaignExists(campaignId: string): Promise<void> {

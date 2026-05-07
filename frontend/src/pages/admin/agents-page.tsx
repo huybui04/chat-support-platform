@@ -334,19 +334,24 @@ export function AdminAgentsPage() {
               }))
             }
           />
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={createAgentForm.isActive}
+          <label className="slide-toggle-field">
+            <span>Active</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={createAgentForm.isActive}
+              aria-label="Toggle active status"
+              className={`slide-toggle ${createAgentForm.isActive ? "is-on" : "is-off"}`}
               disabled={creating}
-              onChange={(event) =>
+              onClick={() =>
                 setCreateAgentForm((prev) => ({
                   ...prev,
-                  isActive: event.target.checked,
+                  isActive: !prev.isActive,
                 }))
               }
-            />
-            Active
+            >
+              <span className="slide-toggle-knob" />
+            </button>
           </label>
         </CrudFormCard>
       ) : null}

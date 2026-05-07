@@ -686,7 +686,7 @@ button.inline-action {
 }
 
 .data-panel {
-  margin-top: 14px;
+  /* margin-top: 14px; */
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -804,6 +804,55 @@ button.inline-action {
   gap: 6px;
   font-size: 13px;
   color: #334155;
+}
+
+.slide-toggle-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.slide-toggle {
+  width: 44px;
+  height: 24px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #e2e8f0;
+  padding: 2px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.slide-toggle-knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+}
+
+.slide-toggle.is-on {
+  background: #14b8a6;
+  border-color: #0f766e;
+}
+
+.slide-toggle.is-on .slide-toggle-knob {
+  transform: translateX(20px);
+}
+
+.slide-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .confirm-overlay {
@@ -1136,14 +1185,19 @@ button.inline-action {
   max-height: 300px;
   overflow: auto;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  padding: 4px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 10px;
 }
 
 .interaction-chat-bubble {
-  border: 1px solid #dbe3ee;
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: #f8fafc;
+  width: min(78%, 620px);
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .interaction-chat-bubble header {
@@ -1167,23 +1221,28 @@ button.inline-action {
   margin: 0;
   font-size: 13px;
   color: #0f172a;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .interaction-chat-bubble.sender-agent {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  margin-left: auto;
+  border-color: #99f6e4;
+  background: #f0fdfa;
 }
 
 .interaction-chat-bubble.sender-customer {
-  background: #ecfeff;
-  border-color: #bae6fd;
+  margin-right: auto;
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 
 .interaction-chat-bubble.sender-system {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  margin: 0 auto;
+  width: min(82%, 700px);
+  border-color: #e9d5ff;
+  background: #faf5ff;
 }
 
 @media (max-width: 1400px) {
@@ -1383,6 +1442,17 @@ button.inline-action {
   outline: none;
   border-color: #d4d0cd;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.agent-detail-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-detail-active-toggle strong {
+  font-size: 13px;
+  color: #0f172a;
 }
 
 .agent-detail-assignment-col {
@@ -1721,6 +1791,10 @@ button.inline-action {
 }
 
 .channel-mapping-create .crud-form-grid .checkbox-field {
+  margin-bottom: 8px;
+}
+
+.channel-mapping-create .crud-form-grid .slide-toggle-field {
   margin-bottom: 8px;
 }
 

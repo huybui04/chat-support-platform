@@ -12,21 +12,25 @@ import {
   getCampaignTeams,
   getChannelMappings,
   getGmailAccounts,
+  getInteractionHistory,
   getTeams,
   removeCampaignAgent,
   removeCampaignTeam,
+  updateChannelMapping,
   type Campaign,
   type CampaignAgentAssignment,
   type CampaignTeamAssignment,
   type ChannelMapping,
   type ExternalChannel,
   type GmailAccountSummary,
+  type InteractionSession,
   type Team,
   type User,
 } from "../../services/admin-api";
+import { getSessionMessages, type ChatMessage } from "../../services/agent-api";
 import { useToast } from "../../store/toast-context";
 
-type DetailTab = "users" | "teams" | "configurations";
+type DetailTab = "users" | "teams" | "configurations" | "interactions";
 
 export function AdminCampaignDetailPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -60,11 +64,23 @@ export function AdminCampaignDetailPage() {
   const [loadingGmailAccounts, setLoadingGmailAccounts] = useState(true);
   const [creatingMapping, setCreatingMapping] = useState(false);
   const [deletingMappingId, setDeletingMappingId] = useState("");
+  const [togglingMappingId, setTogglingMappingId] = useState("");
   const [mappingForm, setMappingForm] = useState({
     externalAccountId: "",
     priority: 1,
     isActive: true,
   });
+
+  const [interactionHistory, setInteractionHistory] = useState<
+    InteractionSession[]
+  >([]);
+  const [loadingInteractionHistory, setLoadingInteractionHistory] =
+    useState(true);
+  const [viewingInteraction, setViewingInteraction] =
+    useState<InteractionSession | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   const inboundOrOutbound =
     campaign?.type === "inbound" ? "Inbound" : "Outbound";
@@ -191,19 +207,89 @@ export function AdminCampaignDetailPage() {
     }
   }, [showError]);
 
+  const loadInteractionHistoryData = useCallback(async () => {
+    if (!campaignId) {
+      return;
+    }
+
+    setLoadingInteractionHistory(true);
+    try {
+      const result = await getInteractionHistory({
+        page: 1,
+        limit: 100,
+        campaignId,
+      });
+      setInteractionHistory(result.items);
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load interaction history",
+      );
+    } finally {
+      setLoadingInteractionHistory(false);
+    }
+  }, [campaignId, showError]);
+
   useEffect(() => {
     void loadCampaign();
     void loadUsersTabData();
     void loadTeamsTabData();
     void loadConfigurationsTabData();
     void loadGmailAccounts();
+    void loadInteractionHistoryData();
   }, [
     loadCampaign,
     loadConfigurationsTabData,
     loadGmailAccounts,
     loadTeamsTabData,
     loadUsersTabData,
+    loadInteractionHistoryData,
   ]);
+
+  useEffect(() => {
+    if (!viewingInteraction) {
+      setChatMessages([]);
+      setChatError("");
+      setChatLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadChatHistory = async () => {
+      setChatLoading(true);
+      setChatError("");
+      try {
+        const result = await getSessionMessages(viewingInteraction.id, {
+          limit: 100,
+        });
+
+        if (!cancelled) {
+          setChatMessages(result.items);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setChatMessages([]);
+          setChatError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load chat history",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setChatLoading(false);
+        }
+      }
+    };
+
+    void loadChatHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewingInteraction]);
 
   const apiBaseUrl =
     import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api/v1";
@@ -349,6 +435,27 @@ export function AdminCampaignDetailPage() {
     }
   };
 
+  const handleToggleMappingActive = async (mapping: ChannelMapping) => {
+    setTogglingMappingId(mapping.id);
+    try {
+      await updateChannelMapping(mapping.id, {
+        isActive: !mapping.isActive,
+      });
+      await loadConfigurationsTabData();
+      showSuccess(
+        `Configuration ${mapping.isActive ? "deactivated" : "activated"} successfully`,
+      );
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update configuration status",
+      );
+    } finally {
+      setTogglingMappingId("");
+    }
+  };
+
   const channelBadgeClass = useMemo(() => {
     if (!campaign) {
       return "status-badge";
@@ -435,6 +542,13 @@ export function AdminCampaignDetailPage() {
               onClick={() => setActiveTab("configurations")}
             >
               Configurations
+            </button>
+            <button
+              type="button"
+              className={activeTab === "interactions" ? "active" : ""}
+              onClick={() => setActiveTab("interactions")}
+            >
+              Interaction History
             </button>
           </div>
 
@@ -628,19 +742,24 @@ export function AdminCampaignDetailPage() {
                         }))
                       }
                     />
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={mappingForm.isActive}
+                    <label className="slide-toggle-field">
+                      <span>Active</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={mappingForm.isActive}
+                        aria-label="Toggle active status"
+                        className={`slide-toggle ${mappingForm.isActive ? "is-on" : "is-off"}`}
                         disabled={creatingMapping || !isMappingSupported}
-                        onChange={(event) =>
+                        onClick={() =>
                           setMappingForm((prev) => ({
                             ...prev,
-                            isActive: event.target.checked,
+                            isActive: !prev.isActive,
                           }))
                         }
-                      />
-                      Active
+                      >
+                        <span className="slide-toggle-knob" />
+                      </button>
                     </label>
                     {isGmailMapping ? (
                       <button
@@ -711,7 +830,24 @@ export function AdminCampaignDetailPage() {
                         </td>
                         <td>{mapping.externalAccountId}</td>
                         <td>{mapping.priority}</td>
-                        <td>{mapping.isActive ? "Yes" : "No"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={mapping.isActive}
+                            aria-label={`Toggle ${mapping.externalAccountId} active status`}
+                            className={`slide-toggle ${mapping.isActive ? "is-on" : "is-off"}`}
+                            disabled={
+                              togglingMappingId === mapping.id ||
+                              deletingMappingId === mapping.id
+                            }
+                            onClick={() =>
+                              void handleToggleMappingActive(mapping)
+                            }
+                          >
+                            <span className="slide-toggle-knob" />
+                          </button>
+                        </td>
                         <td>
                           <button
                             type="button"
@@ -731,8 +867,171 @@ export function AdminCampaignDetailPage() {
               </div>
             </>
           ) : null}
+
+          {activeTab === "interactions" ? (
+            <div className="data-panel campaign-detail-tab-panel">
+              <div className="campaign-detail-toolbar">
+                <h3>Interaction History</h3>
+              </div>
+
+              {loadingInteractionHistory ? (
+                <p className="status-note">Loading interactions...</p>
+              ) : null}
+
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Contact</th>
+                    <th>Agent</th>
+                    <th>Channel</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>Ended</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!loadingInteractionHistory &&
+                  interactionHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan={7}>
+                        <p className="status-note">No interactions found.</p>
+                      </td>
+                    </tr>
+                  ) : null}
+
+                  {interactionHistory.map((session) => (
+                    <tr key={session.id}>
+                      <td>{session.contactName ?? session.contactId}</td>
+                      <td>{session.agentName ?? session.agentId ?? "-"}</td>
+                      <td>
+                        <span
+                          className={`status-badge channel-${session.channel}`}
+                        >
+                          {session.channel}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`status-badge status-${session.status}`}
+                        >
+                          {session.status}
+                        </span>
+                      </td>
+                      <td>
+                        {session.startedAt
+                          ? new Date(session.startedAt).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td>
+                        {session.endedAt
+                          ? new Date(session.endedAt).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="secondary interaction-view-btn"
+                          onClick={() => setViewingInteraction(session)}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {viewingInteraction ? (
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Interaction detail"
+              onClick={() => setViewingInteraction(null)}
+            >
+              <div
+                className="confirm-dialog interaction-detail-modal"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h3>Chat History</h3>
+
+                <div className="interaction-chat-history">
+                  <p className="status-note">
+                    Session ID:{" "}
+                    <strong>{shortId(viewingInteraction.id)}</strong>
+                  </p>
+
+                  {chatLoading ? (
+                    <p className="status-note">Loading chat history...</p>
+                  ) : null}
+
+                  {chatError ? <p className="error-note">{chatError}</p> : null}
+
+                  {!chatLoading && !chatError && chatMessages.length === 0 ? (
+                    <p className="status-note">
+                      No messages in this interaction.
+                    </p>
+                  ) : null}
+
+                  {!chatLoading && !chatError && chatMessages.length > 0 ? (
+                    <div className="interaction-chat-thread">
+                      {chatMessages.map((message) => (
+                        <article
+                          key={message.id}
+                          className={`interaction-chat-bubble sender-${message.senderType}`}
+                        >
+                          <header>
+                            <strong>{toSenderLabel(message.senderType)}</strong>
+                            <span>{formatDateTime(message.createdAt)}</span>
+                          </header>
+                          <p>{message.content}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="confirm-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setViewingInteraction(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
   );
+}
+
+function shortId(value: string) {
+  return value.slice(0, 8);
+}
+
+function formatDateTime(input: string | null) {
+  if (!input) {
+    return "-";
+  }
+
+  return new Date(input).toLocaleString();
+}
+
+function toSenderLabel(senderType: ChatMessage["senderType"]) {
+  if (senderType === "agent") {
+    return "Agent";
+  }
+
+  if (senderType === "customer") {
+    return "Customer";
+  }
+
+  return "System";
 }

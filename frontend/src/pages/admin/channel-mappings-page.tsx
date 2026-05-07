@@ -424,6 +424,24 @@ export function AdminChannelMappingsPage() {
     }
   };
 
+  const toggleActive = async (mapping: ChannelMapping) => {
+    const updated = await runSave(
+      mapping.id,
+      async () =>
+        updateChannelMapping(mapping.id, {
+          isActive: !mapping.isActive,
+        }),
+      "Failed to update channel mapping",
+    );
+
+    if (updated) {
+      showSuccess(
+        `Channel mapping ${mapping.isActive ? "deactivated" : "activated"}`,
+      );
+      await loadMappings();
+    }
+  };
+
   const removeMapping = async () => {
     if (!mappingIdToDelete) {
       return;
@@ -431,11 +449,11 @@ export function AdminChannelMappingsPage() {
 
     const deleted = await runDelete(
       async () => deleteChannelMapping(mappingIdToDelete),
-      "Failed to deactivate channel mapping",
+      "Failed to remove channel mapping",
     );
 
     if (deleted !== undefined) {
-      showSuccess("Channel mapping deactivated");
+      showSuccess("Channel mapping removed");
       setMappingIdToDelete(null);
       await loadMappings();
     }
@@ -570,19 +588,24 @@ export function AdminChannelMappingsPage() {
             />
           </label>
 
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={createForm.isActive}
+          <label className="slide-toggle-field">
+            <span>Active</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={createForm.isActive}
+              aria-label="Toggle active status"
+              className={`slide-toggle ${createForm.isActive ? "is-on" : "is-off"}`}
               disabled={creating}
-              onChange={(event) =>
+              onClick={() =>
                 setCreateForm((prev) => ({
                   ...prev,
-                  isActive: event.target.checked,
+                  isActive: !prev.isActive,
                 }))
               }
-            />
-            Active
+            >
+              <span className="slide-toggle-knob" />
+            </button>
           </label>
 
           <button
@@ -787,21 +810,34 @@ export function AdminChannelMappingsPage() {
                 </td>
                 <td>
                   {editingId === mapping.id ? (
-                    <input
-                      type="checkbox"
-                      checked={editForm.isActive}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={editForm.isActive}
+                      aria-label="Toggle active status"
+                      className={`slide-toggle ${editForm.isActive ? "is-on" : "is-off"}`}
                       disabled={savingId === mapping.id}
-                      onChange={(event) =>
+                      onClick={() =>
                         setEditForm((prev) => ({
                           ...prev,
-                          isActive: event.target.checked,
+                          isActive: !prev.isActive,
                         }))
                       }
-                    />
-                  ) : mapping.isActive ? (
-                    <span className="status-badge online">yes</span>
+                    >
+                      <span className="slide-toggle-knob" />
+                    </button>
                   ) : (
-                    <span className="status-badge offline">no</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={mapping.isActive}
+                      aria-label={`Toggle ${mapping.externalAccountId} active status`}
+                      className={`slide-toggle ${mapping.isActive ? "is-on" : "is-off"}`}
+                      disabled={savingId === mapping.id || deleting}
+                      onClick={() => void toggleActive(mapping)}
+                    >
+                      <span className="slide-toggle-knob" />
+                    </button>
                   )}
                 </td>
                 <td>{new Date(mapping.createdAt).toLocaleString()}</td>
@@ -833,9 +869,9 @@ export function AdminChannelMappingsPage() {
 
       <ConfirmDialog
         open={Boolean(mappingIdToDelete)}
-        title="Deactivate mapping"
-        message="This action will deactivate the mapping and stop inbound routing for it."
-        confirmLabel="Deactivate"
+        title="Remove mapping"
+        message="This action will permanently remove the mapping and stop inbound routing for it."
+        confirmLabel="Remove"
         confirmLoading={deleting}
         onCancel={() => setMappingIdToDelete(null)}
         onConfirm={() => void removeMapping()}

@@ -349,7 +349,7 @@ export function AdminContactsPage() {
               <th>ID</th>
               <th>Channel</th>
               <th>Agent Assigned</th>
-              <th>Phone Number</th>
+              <th>Contact</th>
               <th>Campaign</th>
               <th>Skills Tagged</th>
               <th>Started Time</th>

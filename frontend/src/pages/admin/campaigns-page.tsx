@@ -213,14 +213,14 @@ export function AdminCampaignsPage() {
 
   return (
     <section className="placeholder-page">
-      <h1>Campaign Management</h1>
+      {/* <h1>Campaign Management</h1>
       {activeTab !== "list" ? (
         <p className="status-note">
           Manage campaigns by workflow: list and create.
         </p>
-      ) : null}
+      ) : null} */}
 
-      <div
+      {/* <div
         className="management-tabs"
         role="tablist"
         aria-label="Campaign management sections"
@@ -239,7 +239,7 @@ export function AdminCampaignsPage() {
         >
           Create Campaign
         </button>
-      </div>
+      </div> */}
 
       {activeTab === "create" ? (
         <CrudFormCard

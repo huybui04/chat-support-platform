@@ -385,20 +385,25 @@ export function AdminAgentDetailPage() {
             </label>
             <label>
               Active
-              <select
-                className="editable-field"
-                value={profileForm.isActive ? "true" : "false"}
-                disabled={savingProfile}
-                onChange={(event) =>
-                  setProfileForm((prev) => ({
-                    ...prev,
-                    isActive: event.target.value === "true",
-                  }))
-                }
-              >
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
+              <span className="slide-toggle-field agent-detail-active-toggle">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={profileForm.isActive}
+                  aria-label="Toggle active status"
+                  className={`slide-toggle ${profileForm.isActive ? "is-on" : "is-off"}`}
+                  disabled={savingProfile}
+                  onClick={() =>
+                    setProfileForm((prev) => ({
+                      ...prev,
+                      isActive: !prev.isActive,
+                    }))
+                  }
+                >
+                  <span className="slide-toggle-knob" />
+                </button>
+                <strong>{profileForm.isActive ? "Yes" : "No"}</strong>
+              </span>
             </label>
           </div>
           <div className="campaign-detail-toolbar">
