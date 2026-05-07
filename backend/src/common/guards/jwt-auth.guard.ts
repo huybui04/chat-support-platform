@@ -1,19 +1,27 @@
 import {
   CanActivate,
+  ForbiddenException,
   ExecutionContext,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
+import { Repository } from 'typeorm';
 
 import type { AuthUser } from '../auth/auth-user.type';
 import { parseBearerToken, verifyAndBuildAuthUser } from '../auth/jwt.util';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { User } from '../../database/entities';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -55,6 +63,15 @@ export class JwtAuthGuard implements CanActivate {
 
     if (!user) {
       throw new UnauthorizedException('Invalid token payload');
+    }
+
+    const dbUser = await this.usersRepository.findOne({
+      where: { keycloakId: user.keycloakId },
+      select: { id: true, isActive: true },
+    });
+
+    if (dbUser && !dbUser.isActive) {
+      throw new ForbiddenException('Account is deactivated');
     }
 
     request.user = user;

@@ -1,4 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { verifyAndBuildAuthUser } from '../../common/auth/jwt.util';
+import { User } from '../../database/entities';
 
 import { AuthLoginDto } from './dto/auth-login.dto';
 import { AuthLogoutDto } from './dto/auth-logout.dto';
@@ -24,20 +33,31 @@ type AuthTokens = {
 
 @Injectable()
 export class AuthService {
+  constructor(
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+  ) {}
+
   async login(payload: AuthLoginDto): Promise<AuthTokens> {
-    return this.requestToken({
+    const tokens = await this.requestToken({
       grant_type: 'authorization_code',
       code: payload.code,
       redirect_uri: payload.redirectUri,
       code_verifier: payload.codeVerifier,
     });
+
+    await this.assertUserIsActive(tokens.accessToken);
+    return tokens;
   }
 
   async refresh(payload: AuthRefreshDto): Promise<AuthTokens> {
-    return this.requestToken({
+    const tokens = await this.requestToken({
       grant_type: 'refresh_token',
       refresh_token: payload.refreshToken,
     });
+
+    await this.assertUserIsActive(tokens.accessToken);
+    return tokens;
   }
 
   async logout(payload: AuthLogoutDto): Promise<void> {
@@ -131,5 +151,22 @@ export class AuthService {
 
   private getLogoutEndpoint(): string {
     return `${this.getIssuer()}/protocol/openid-connect/logout`;
+  }
+
+  private async assertUserIsActive(accessToken: string): Promise<void> {
+    const authUser = await verifyAndBuildAuthUser(accessToken);
+
+    if (!authUser?.keycloakId) {
+      throw new UnauthorizedException('Invalid token payload');
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { keycloakId: authUser.keycloakId },
+      select: { id: true, isActive: true },
+    });
+
+    if (user && !user.isActive) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
   }
 }

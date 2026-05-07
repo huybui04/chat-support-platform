@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { User } from './database/entities';
 import { getTypeOrmConfig } from './database/typeorm.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
@@ -21,6 +22,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 @Module({
   imports: [
     TypeOrmModule.forRoot(getTypeOrmConfig()),
+    TypeOrmModule.forFeature([User]),
     AuthModule,
     CampaignsModule,
     ChannelMappingsModule,
