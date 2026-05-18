@@ -26,10 +26,11 @@ const PAGE_SIZE = 20;
 type Mode = "agents" | "teams";
 
 type AgentForm = {
-  keycloakId: string;
-  fullName: string;
+  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  isActive: boolean;
+  role: "agent" | "supervisor" | "";
 };
 
 type TeamForm = {
@@ -38,10 +39,11 @@ type TeamForm = {
 };
 
 const initialCreateAgentForm: AgentForm = {
-  keycloakId: "",
-  fullName: "",
+  username: "",
+  firstName: "",
+  lastName: "",
   email: "",
-  isActive: true,
+  role: "",
 };
 
 const initialTeamForm: TeamForm = {
@@ -73,6 +75,11 @@ export function AdminAgentsPage() {
   );
   const [createTeamForm, setCreateTeamForm] =
     useState<TeamForm>(initialTeamForm);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordMode, setPasswordMode] = useState<"auto" | "manual">("manual");
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: Mode;
@@ -93,14 +100,16 @@ export function AdminAgentsPage() {
   const filteredAgents = useMemo(() => {
     const normalized = keyword.trim().toLowerCase();
     if (!normalized) {
-      return effectiveAgents;
+      return effectiveAgents.filter((agent) => agent.isActive);
     }
 
-    return effectiveAgents.filter(
-      (agent) =>
-        agent.fullName.toLowerCase().includes(normalized) ||
-        agent.email.toLowerCase().includes(normalized),
-    );
+    return effectiveAgents
+      .filter((agent) => agent.isActive)
+      .filter(
+        (agent) =>
+          agent.fullName.toLowerCase().includes(normalized) ||
+          agent.email.toLowerCase().includes(normalized),
+      );
   }, [effectiveAgents, keyword]);
 
   const filteredTeams = useMemo(() => {
@@ -158,29 +167,56 @@ export function AdminAgentsPage() {
   }, [loadData]);
 
   const handleCreateAgent = async () => {
-    if (!createAgentForm.fullName.trim() || !createAgentForm.email.trim()) {
-      showError("Full name and email are required");
+    if (!createAgentForm.firstName.trim() || !createAgentForm.lastName.trim()) {
+      showError("First name and last name are required");
       return;
     }
 
-    if (!createAgentForm.keycloakId.trim()) {
-      showError("Keycloak ID is required");
+    if (!createAgentForm.username.trim()) {
+      showError("Username is required");
       return;
     }
+
+    if (!createAgentForm.email.trim()) {
+      showError("Email is required");
+      return;
+    }
+
+    if (!createAgentForm.role) {
+      showError("User role is required");
+      return;
+    }
+
+    if (!passwordSaved || !passwordValue.trim()) {
+      showError("Please create and save the password first");
+      return;
+    }
+
+    const fullName =
+      `${createAgentForm.firstName} ${createAgentForm.lastName}`.trim();
 
     const created = await runCreate(
       async () =>
         createAgent({
-          keycloakId: createAgentForm.keycloakId.trim(),
-          fullName: createAgentForm.fullName.trim(),
+          username: createAgentForm.username.trim(),
+          fullName,
           email: createAgentForm.email.trim(),
-          isActive: createAgentForm.isActive,
+          role: createAgentForm.role,
+          password: passwordValue,
+          requirePasswordChange,
+          firstName: createAgentForm.firstName.trim(),
+          lastName: createAgentForm.lastName.trim(),
+          isActive: true,
         }),
       "Failed to create agent",
     );
 
     if (created) {
       setCreateAgentForm(initialCreateAgentForm);
+      setPasswordValue("");
+      setPasswordMode("manual");
+      setPasswordSaved(false);
+      setRequirePasswordChange(false);
       showSuccess("Agent created successfully");
       setShowCreate(false);
       await loadData();
@@ -294,76 +330,222 @@ export function AdminAgentsPage() {
 
       {showCreate && mode === "agents" ? (
         <>
-          <div className="page-actions">
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowCreate(false)}
-            >
-              Back to list
-            </button>
-          </div>
-          <CrudFormCard
-            title="Create Agent"
-            submitLabel="Create agent"
-            submittingLabel="Creating..."
-            submitting={creating}
-            onSubmit={() => void handleCreateAgent()}
-          >
-            <input
-              placeholder="Keycloak ID"
-              value={createAgentForm.keycloakId}
-              disabled={creating}
-              onChange={(event) =>
-                setCreateAgentForm((prev) => ({
-                  ...prev,
-                  keycloakId: event.target.value,
-                }))
-              }
-            />
-            <input
-              placeholder="Full name"
-              value={createAgentForm.fullName}
-              disabled={creating}
-              onChange={(event) =>
-                setCreateAgentForm((prev) => ({
-                  ...prev,
-                  fullName: event.target.value,
-                }))
-              }
-            />
-            <input
-              placeholder="Email"
-              type="email"
-              value={createAgentForm.email}
-              disabled={creating}
-              onChange={(event) =>
-                setCreateAgentForm((prev) => ({
-                  ...prev,
-                  email: event.target.value,
-                }))
-              }
-            />
-            <label className="slide-toggle-field">
-              <span>Active</span>
+          <div className="agent-create-flow">
+            <div className="agent-create-card">
+              <div className="agent-create-grid">
+                <label className="agent-create-field">
+                  Username*
+                  <input
+                    value={createAgentForm.username}
+                    disabled={creating}
+                    onChange={(event) =>
+                      setCreateAgentForm((prev) => ({
+                        ...prev,
+                        username: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="agent-create-field">
+                  Email*
+                  <input
+                    type="email"
+                    value={createAgentForm.email}
+                    disabled={creating}
+                    onChange={(event) =>
+                      setCreateAgentForm((prev) => ({
+                        ...prev,
+                        email: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="agent-create-field">
+                  First Name*
+                  <input
+                    value={createAgentForm.firstName}
+                    disabled={creating}
+                    onChange={(event) =>
+                      setCreateAgentForm((prev) => ({
+                        ...prev,
+                        firstName: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="agent-create-field">
+                  Last Name*
+                  <input
+                    value={createAgentForm.lastName}
+                    disabled={creating}
+                    onChange={(event) =>
+                      setCreateAgentForm((prev) => ({
+                        ...prev,
+                        lastName: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <div className="agent-create-field agent-password-field">
+                  <span>Password</span>
+                  <span className={`password-status ${passwordSaved ? "is-saved" : "is-pending"}`}>
+                    {passwordSaved ? "Saved" : "Not saved"}
+                  </span>
+                  <button
+                    type="button"
+                    className="inline-link-button"
+                    onClick={() => setPasswordModalOpen(true)}
+                    disabled={creating}
+                  >
+                    Create Password
+                  </button>
+                </div>
+
+                <label className="agent-create-field">
+                  User Role*
+                  <select
+                    value={createAgentForm.role}
+                    disabled={creating}
+                    onChange={(event) =>
+                      setCreateAgentForm((prev) => ({
+                        ...prev,
+                        role: event.target.value as AgentForm["role"],
+                      }))
+                    }
+                  >
+                    <option value="">Please Select</option>
+                    <option value="agent">Agent</option>
+                    <option value="supervisor">Supervisor</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="agent-create-footer">
               <button
                 type="button"
-                role="switch"
-                aria-checked={createAgentForm.isActive}
-                aria-label="Toggle active status"
-                className={`slide-toggle ${createAgentForm.isActive ? "is-on" : "is-off"}`}
+                className="secondary"
+                onClick={() => setShowCreate(false)}
                 disabled={creating}
-                onClick={() =>
-                  setCreateAgentForm((prev) => ({
-                    ...prev,
-                    isActive: !prev.isActive,
-                  }))
-                }
               >
-                <span className="slide-toggle-knob" />
+                Cancel
               </button>
-            </label>
-          </CrudFormCard>
+              <button
+                type="button"
+                onClick={() => void handleCreateAgent()}
+                disabled={creating}
+              >
+                {creating ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+
+          {passwordModalOpen ? (
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Create password"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setPasswordModalOpen(false);
+                }
+              }}
+            >
+              <div className="confirm-dialog password-dialog">
+                <div className="password-dialog-header">
+                  <h3>Create Password</h3>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => setPasswordModalOpen(false)}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="password-options">
+                  <label>
+                    <input
+                      type="radio"
+                      name="password-mode"
+                      checked={passwordMode === "auto"}
+                      onChange={() => {
+                        setPasswordMode("auto");
+                        setPasswordSaved(false);
+                      }}
+                    />
+                    Auto generate password
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="password-mode"
+                      checked={passwordMode === "manual"}
+                      onChange={() => {
+                        setPasswordMode("manual");
+                        setPasswordSaved(false);
+                      }}
+                    />
+                    Create password manually
+                  </label>
+                </div>
+                <label className="password-field">
+                  Password*
+                  <input
+                    type={passwordMode === "auto" ? "text" : "password"}
+                    value={passwordValue}
+                    disabled={passwordMode === "auto"}
+                    onChange={(event) => {
+                      setPasswordValue(event.target.value);
+                      setPasswordSaved(false);
+                    }}
+                  />
+                </label>
+                <label className="agent-toggle-field password-toggle">
+                  <span>Make user change password when first sign in</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={requirePasswordChange}
+                    aria-label="Toggle password change on first sign in"
+                    className={`slide-toggle ${requirePasswordChange ? "is-on" : "is-off"}`}
+                    onClick={() => setRequirePasswordChange((prev) => !prev)}
+                  >
+                    <span className="slide-toggle-knob" />
+                  </button>
+                </label>
+                <div className="page-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (passwordMode === "manual" && !passwordValue.trim()) {
+                        showError("Password is required");
+                        return;
+                      }
+
+                      if (passwordMode === "auto" && !passwordValue) {
+                        setPasswordValue(generatePassword());
+                        setPasswordSaved(false);
+                        showSuccess("Password generated. Click Save to confirm");
+                        return;
+                      }
+
+                      setPasswordSaved(true);
+                      setPasswordModalOpen(false);
+                      showSuccess("Password saved");
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : null}
 
@@ -558,4 +740,17 @@ export function AdminAgentsPage() {
 function toOptionalText(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function generatePassword(): string {
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const length = 12;
+  let result = "";
+
+  for (let i = 0; i < length; i += 1) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+
+  return result;
 }

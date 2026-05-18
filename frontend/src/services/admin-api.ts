@@ -123,9 +123,13 @@ export type UpdateCampaignPayload = Omit<
 };
 
 export type CreateAgentPayload = {
-  keycloakId: string;
+  username: string;
   fullName: string;
   email: string;
+  password: string;
+  requirePasswordChange?: boolean;
+  firstName?: string;
+  lastName?: string;
   role?: User["role"];
   isActive?: boolean;
   isOnline?: boolean;
