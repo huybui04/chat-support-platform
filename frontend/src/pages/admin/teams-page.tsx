@@ -35,6 +35,7 @@ export function AdminTeamsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createForm, setCreateForm] = useState<TeamForm>(initialForm);
+  const [showCreate, setShowCreate] = useState(false);
   const [teamIdToDelete, setTeamIdToDelete] = useState<string | null>(null);
   const { creating, deleting, runCreate, runDelete } = useCrudActions();
 
@@ -78,6 +79,7 @@ export function AdminTeamsPage() {
     if (created) {
       setCreateForm(initialForm);
       showSuccess("Team created successfully");
+      setShowCreate(false);
       await loadTeams();
     }
   };
@@ -92,7 +94,7 @@ export function AdminTeamsPage() {
       "Failed to delete team",
     );
 
-    if (deleted !== undefined) {
+    if (deleted) {
       showSuccess("Team deleted successfully");
       setTeamIdToDelete(null);
       await loadTeams();
@@ -106,84 +108,101 @@ export function AdminTeamsPage() {
       <p className="status-note">
         {meta?.total !== undefined ? `Total teams: ${meta.total}` : null}
       </p>
+
+      <div className="page-actions">
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => setShowCreate((prev) => !prev)}
+        >
+          {showCreate ? "Back to list" : "Create New Team +"}
+        </button>
+      </div>
+
       {loading ? <p className="status-note">Loading teams...</p> : null}
       {error ? <p className="error-note">{error}</p> : null}
 
-      <CrudFormCard
-        title="Create Team"
-        submitLabel="Create team"
-        submittingLabel="Creating..."
-        submitting={creating}
-        onSubmit={() => void handleCreate()}
-      >
-        <input
-          placeholder="Team name"
-          value={createForm.name}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({ ...prev, name: event.target.value }))
-          }
-        />
-        <input
-          placeholder="Description (optional)"
-          value={createForm.description}
-          disabled={creating}
-          onChange={(event) =>
-            setCreateForm((prev) => ({
-              ...prev,
-              description: event.target.value,
-            }))
-          }
-        />
-      </CrudFormCard>
+      {showCreate ? (
+        <CrudFormCard
+          title="Create Team"
+          submitLabel="Create team"
+          submittingLabel="Creating..."
+          submitting={creating}
+          onSubmit={() => void handleCreate()}
+        >
+          <input
+            placeholder="Team name"
+            value={createForm.name}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({ ...prev, name: event.target.value }))
+            }
+          />
+          <input
+            placeholder="Description (optional)"
+            value={createForm.description}
+            disabled={creating}
+            onChange={(event) =>
+              setCreateForm((prev) => ({
+                ...prev,
+                description: event.target.value,
+              }))
+            }
+          />
+        </CrudFormCard>
+      ) : null}
 
-      <div className="data-panel">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Description</th>
-              <th>Created At</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((team) => (
-              <tr key={team.id}>
-                <td>
-                  <Link
-                    className="campaign-name-link"
-                    to={`/admin/teams/${team.id}`}
-                  >
-                    {team.name}
-                  </Link>
-                </td>
-                <td>{team.description ?? "-"}</td>
-                <td>{new Date(team.createdAt).toLocaleString()}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={deleting}
-                    onClick={() => setTeamIdToDelete(team.id)}
-                  >
-                    Delete
-                  </button>
-                </td>
+      {!showCreate ? (
+        <div className="data-panel">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Created At</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {items.map((team) => (
+                <tr key={team.id}>
+                  <td>
+                    <Link
+                      className="campaign-name-link"
+                      to={`/admin/teams/${team.id}`}
+                    >
+                      {team.name}
+                    </Link>
+                  </td>
+                  <td>{team.description ?? "-"}</td>
+                  <td>{new Date(team.createdAt).toLocaleString()}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={deleting}
+                      onClick={() => setTeamIdToDelete(team.id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
-      <PaginationControls
-        page={page}
-        limit={PAGE_SIZE}
-        total={meta?.total}
-        currentCount={items.length}
-        loading={loading}
-        onPageChange={setPage}
-      />
+      {!showCreate ? (
+        <PaginationControls
+          page={page}
+          limit={PAGE_SIZE}
+          total={meta?.total}
+          currentCount={items.length}
+          loading={loading}
+          onPageChange={setPage}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(teamIdToDelete)}

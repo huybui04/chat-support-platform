@@ -229,7 +229,7 @@ export function AdminAgentsPage() {
         : "Failed to remove team",
     );
 
-    if (deleted !== undefined) {
+    if (deleted) {
       showSuccess(
         deleteTarget.type === "agents"
           ? "Agent disabled successfully"
@@ -293,103 +293,125 @@ export function AdminAgentsPage() {
       {error ? <p className="error-note">{error}</p> : null}
 
       {showCreate && mode === "agents" ? (
-        <CrudFormCard
-          title="Create Agent"
-          submitLabel="Create agent"
-          submittingLabel="Creating..."
-          submitting={creating}
-          onSubmit={() => void handleCreateAgent()}
-        >
-          <input
-            placeholder="Keycloak ID"
-            value={createAgentForm.keycloakId}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateAgentForm((prev) => ({
-                ...prev,
-                keycloakId: event.target.value,
-              }))
-            }
-          />
-          <input
-            placeholder="Full name"
-            value={createAgentForm.fullName}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateAgentForm((prev) => ({
-                ...prev,
-                fullName: event.target.value,
-              }))
-            }
-          />
-          <input
-            placeholder="Email"
-            type="email"
-            value={createAgentForm.email}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateAgentForm((prev) => ({
-                ...prev,
-                email: event.target.value,
-              }))
-            }
-          />
-          <label className="slide-toggle-field">
-            <span>Active</span>
+        <>
+          <div className="page-actions">
             <button
               type="button"
-              role="switch"
-              aria-checked={createAgentForm.isActive}
-              aria-label="Toggle active status"
-              className={`slide-toggle ${createAgentForm.isActive ? "is-on" : "is-off"}`}
+              className="secondary"
+              onClick={() => setShowCreate(false)}
+            >
+              Back to list
+            </button>
+          </div>
+          <CrudFormCard
+            title="Create Agent"
+            submitLabel="Create agent"
+            submittingLabel="Creating..."
+            submitting={creating}
+            onSubmit={() => void handleCreateAgent()}
+          >
+            <input
+              placeholder="Keycloak ID"
+              value={createAgentForm.keycloakId}
               disabled={creating}
-              onClick={() =>
+              onChange={(event) =>
                 setCreateAgentForm((prev) => ({
                   ...prev,
-                  isActive: !prev.isActive,
+                  keycloakId: event.target.value,
                 }))
               }
-            >
-              <span className="slide-toggle-knob" />
-            </button>
-          </label>
-        </CrudFormCard>
+            />
+            <input
+              placeholder="Full name"
+              value={createAgentForm.fullName}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateAgentForm((prev) => ({
+                  ...prev,
+                  fullName: event.target.value,
+                }))
+              }
+            />
+            <input
+              placeholder="Email"
+              type="email"
+              value={createAgentForm.email}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateAgentForm((prev) => ({
+                  ...prev,
+                  email: event.target.value,
+                }))
+              }
+            />
+            <label className="slide-toggle-field">
+              <span>Active</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={createAgentForm.isActive}
+                aria-label="Toggle active status"
+                className={`slide-toggle ${createAgentForm.isActive ? "is-on" : "is-off"}`}
+                disabled={creating}
+                onClick={() =>
+                  setCreateAgentForm((prev) => ({
+                    ...prev,
+                    isActive: !prev.isActive,
+                  }))
+                }
+              >
+                <span className="slide-toggle-knob" />
+              </button>
+            </label>
+          </CrudFormCard>
+        </>
       ) : null}
 
       {showCreate && mode === "teams" ? (
-        <CrudFormCard
-          title="Create Team"
-          submitLabel="Create team"
-          submittingLabel="Creating..."
-          submitting={creating}
-          onSubmit={() => void handleCreateTeam()}
-        >
-          <input
-            placeholder="Team name"
-            value={createTeamForm.name}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateTeamForm((prev) => ({
-                ...prev,
-                name: event.target.value,
-              }))
-            }
-          />
-          <input
-            placeholder="Description (optional)"
-            value={createTeamForm.description}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateTeamForm((prev) => ({
-                ...prev,
-                description: event.target.value,
-              }))
-            }
-          />
-        </CrudFormCard>
+        <>
+          <div className="page-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShowCreate(false)}
+            >
+              Back to list
+            </button>
+          </div>
+          <CrudFormCard
+            title="Create Team"
+            submitLabel="Create team"
+            submittingLabel="Creating..."
+            submitting={creating}
+            onSubmit={() => void handleCreateTeam()}
+          >
+            <input
+              placeholder="Team name"
+              value={createTeamForm.name}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateTeamForm((prev) => ({
+                  ...prev,
+                  name: event.target.value,
+                }))
+              }
+            />
+            <input
+              placeholder="Description (optional)"
+              value={createTeamForm.description}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateTeamForm((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </CrudFormCard>
+        </>
       ) : null}
 
-      {mode === "agents" ? (
+      {mode === "agents" && !showCreate ? (
         <div className="data-panel">
           <table className="data-table">
             <thead>
@@ -450,7 +472,7 @@ export function AdminAgentsPage() {
         </div>
       ) : null}
 
-      {mode === "teams" ? (
+      {mode === "teams" && !showCreate ? (
         <div className="data-panel">
           <table className="data-table">
             <thead>
@@ -501,16 +523,18 @@ export function AdminAgentsPage() {
         </div>
       ) : null}
 
-      <PaginationControls
-        page={page}
-        limit={PAGE_SIZE}
-        total={meta?.total}
-        currentCount={
-          mode === "agents" ? filteredAgents.length : filteredTeams.length
-        }
-        loading={loading}
-        onPageChange={setPage}
-      />
+      {!showCreate ? (
+        <PaginationControls
+          page={page}
+          limit={PAGE_SIZE}
+          total={meta?.total}
+          currentCount={
+            mode === "agents" ? filteredAgents.length : filteredTeams.length
+          }
+          loading={loading}
+          onPageChange={setPage}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

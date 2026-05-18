@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 import {
@@ -12,6 +12,7 @@ import {
   isKeycloakConfigured,
 } from "../../services/keycloak-auth";
 import { useAuth } from "../../store/auth-context";
+import { useAgentRealtime } from "../../store/use-agent-realtime";
 
 type NavItem = {
   label: string;
@@ -22,6 +23,87 @@ type NavSection = {
   label: string;
   items: NavItem[];
 };
+
+type IconProps = {
+  className?: string;
+};
+
+function HomeIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.5Z" />
+    </svg>
+  );
+}
+
+function ChatIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+    </svg>
+  );
+}
+
+function MailIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Zm0 2.2V17h16V8.2l-8 5-8-5Z" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 5h-2v6l5 3 1-1.73-4-2.27Z" />
+    </svg>
+  );
+}
+
+function ProfileIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+    </svg>
+  );
+}
+
+function LogoutIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 17v-2H5v-6h5V7L4 12l6 5Zm1-10h7a1 1 0 0 1 1 1v2h-2V9h-6V7Zm6 6h2v2a1 1 0 0 1-1 1h-7v-2h6v-1Z" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m7 9 5 5 5-5H7Z" />
+    </svg>
+  );
+}
+
+function AgentHeaderKpis() {
+  const { metrics } = useAgentRealtime();
+
+  return (
+    <div className="agent-header-kpis">
+      <div className="agent-header-kpi active">
+        <strong>{metrics.onlineAgents}</strong>
+        <span>Active</span>
+      </div>
+      <div className="agent-header-kpi chat">
+        <strong>{metrics.pendingChatCount}</strong>
+        <span>Chat</span>
+      </div>
+      <div className="agent-header-kpi email">
+        <strong>{metrics.pendingEmailCount}</strong>
+        <span>Email</span>
+      </div>
+    </div>
+  );
+}
 
 const supervisorNav: NavSection[] = [
   {
@@ -58,6 +140,9 @@ export function AppShell() {
   const { role, token, logout } = useAuth();
   const [agentUserId, setAgentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const currentPathWithQuery = `${location.pathname}${location.search}`;
 
   const activeSupervisorTopSection = useMemo(() => {
@@ -155,6 +240,46 @@ export function AppShell() {
     };
   }, [agentUserId, role, token]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!profileMenuOpen) {
+      return;
+    }
+
+    const onDocumentClick = (event: MouseEvent) => {
+      if (
+        profileMenuRef.current &&
+        event.target instanceof Node &&
+        !profileMenuRef.current.contains(event.target)
+      ) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onDocumentClick);
+    document.addEventListener("keydown", onEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", onDocumentClick);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [profileMenuOpen]);
+
   const onLogout = async () => {
     if (role === "agent" && agentUserId) {
       try {
@@ -202,6 +327,12 @@ export function AppShell() {
                           }
                           to={item.to}
                         >
+                          {item.label === "Dashboard" ? (
+                            <HomeIcon className="nav-icon" />
+                          ) : null}
+                          {item.label === "All Interactions" ? (
+                            <ClockIcon className="nav-icon" />
+                          ) : null}
                           {item.label}
                         </Link>
                       ))}
@@ -211,6 +342,12 @@ export function AppShell() {
                       className={isSectionActive ? "active" : ""}
                       to={section.items[0].to}
                     >
+                      {section.items[0].label === "Dashboard" ? (
+                        <HomeIcon className="nav-icon" />
+                      ) : null}
+                      {section.items[0].label === "All Interactions" ? (
+                        <ClockIcon className="nav-icon" />
+                      ) : null}
                       {section.items[0].label}
                     </Link>
                   )}
@@ -226,20 +363,80 @@ export function AppShell() {
                 className={currentPathWithQuery === item.to ? "active" : ""}
                 to={item.to}
               >
+                {item.label === "Dashboard" ? (
+                  <HomeIcon className="nav-icon" />
+                ) : null}
+                {item.label === "Chat Inbox" ? (
+                  <ChatIcon className="nav-icon" />
+                ) : null}
+                {item.label === "Email Inbox" ? (
+                  <MailIcon className="nav-icon" />
+                ) : null}
+                {item.label === "All Interaction History" ? (
+                  <ClockIcon className="nav-icon" />
+                ) : null}
                 {item.label}
               </Link>
             ))}
           </nav>
         )}
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void onLogout()}
-        >
-          Logout
-        </button>
+        {role !== "agent" ? (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void onLogout()}
+          >
+            Logout
+          </button>
+        ) : null}
       </aside>
       <section className="page-content">
+        {role === "agent" ? (
+          <header className="app-header agent-header">
+            <div className="agent-header-left">
+              <span className="agent-header-brand">Support Console</span>
+              <span className="agent-header-separator" aria-hidden="true">
+                |
+              </span>
+              <span className="agent-header-title">Agent Workbench</span>
+            </div>
+            <div className="agent-header-right">
+              <AgentHeaderKpis />
+              <div className="agent-header-meta">
+                <span>{currentTime.toLocaleTimeString()}</span>
+                <div className="agent-header-profile" ref={profileMenuRef}>
+                  <button
+                    type="button"
+                    className="agent-header-profile-button"
+                    onClick={() => setProfileMenuOpen((value) => !value)}
+                    aria-haspopup="menu"
+                    aria-expanded={profileMenuOpen}
+                    aria-label="Open profile menu"
+                  >
+                    <ProfileIcon className="agent-header-profile-icon" />
+                    <ChevronDownIcon className="agent-header-chevron" />
+                  </button>
+                  {profileMenuOpen ? (
+                    <div className="agent-header-dropdown" role="menu">
+                      <button type="button" className="agent-header-menu-item">
+                        <ProfileIcon className="agent-header-menu-icon" />
+                        Profile
+                      </button>
+                      <button
+                        type="button"
+                        className="agent-header-menu-item"
+                        onClick={() => void onLogout()}
+                      >
+                        <LogoutIcon className="agent-header-menu-icon" />
+                        Log out
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </header>
+        ) : null}
         <Outlet />
       </section>
     </div>

@@ -33,10 +33,8 @@ export function AdminContactsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [phoneKeyword, setPhoneKeyword] = useState("");
   const [campaignKeyword, setCampaignKeyword] = useState("");
-  const [subjectKeyword, setSubjectKeyword] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [channelFilter, setChannelFilter] = useState<
     InteractionSession["channel"] | "all"
@@ -72,7 +70,6 @@ export function AdminContactsPage() {
 
         setItems(result.items);
         setMeta(result.meta);
-        setSelectedIds([]);
       } catch (caughtError) {
         if (!mounted) {
           return;
@@ -144,7 +141,6 @@ export function AdminContactsPage() {
   const filteredItems = useMemo(() => {
     const phoneNeedle = phoneKeyword.trim().toLowerCase();
     const campaignNeedle = campaignKeyword.trim().toLowerCase();
-    const subjectNeedle = subjectKeyword.trim().toLowerCase();
 
     return items.filter((item) => {
       if (channelFilter !== "all" && item.channel !== channelFilter) {
@@ -154,7 +150,6 @@ export function AdminContactsPage() {
       const contactText =
         `${item.contactName ?? ""} ${item.contactId}`.toLowerCase();
       const campaignText = `${item.campaignName ?? ""}`.toLowerCase();
-      const agentText = `${item.agentName ?? ""}`.toLowerCase();
 
       if (phoneNeedle && !contactText.includes(phoneNeedle)) {
         return false;
@@ -164,35 +159,9 @@ export function AdminContactsPage() {
         return false;
       }
 
-      if (subjectNeedle && !agentText.includes(subjectNeedle)) {
-        return false;
-      }
-
       return true;
     });
-  }, [campaignKeyword, channelFilter, items, phoneKeyword, subjectKeyword]);
-
-  const selectedAll =
-    filteredItems.length > 0 && selectedIds.length === filteredItems.length;
-
-  const toggleSelectAll = () => {
-    if (selectedAll) {
-      setSelectedIds([]);
-      return;
-    }
-
-    setSelectedIds(filteredItems.map((item) => item.id));
-  };
-
-  const toggleRow = (id: string) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((value) => value !== id);
-      }
-
-      return [...prev, id];
-    });
-  };
+  }, [campaignKeyword, channelFilter, items, phoneKeyword]);
 
   const downloadCsv = () => {
     if (filteredItems.length === 0) {
@@ -268,14 +237,7 @@ export function AdminContactsPage() {
 
         <input
           className="interaction-search-input"
-          placeholder="Email Subject"
-          value={subjectKeyword}
-          onChange={(event) => setSubjectKeyword(event.target.value)}
-        />
-
-        <input
-          className="interaction-search-input"
-          placeholder="Email Content"
+          placeholder="Campaign name"
           value={campaignKeyword}
           onChange={(event) => setCampaignKeyword(event.target.value)}
         />
@@ -338,14 +300,6 @@ export function AdminContactsPage() {
         <table className="data-table interaction-table">
           <thead>
             <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  checked={selectedAll}
-                  onChange={toggleSelectAll}
-                  aria-label="Select all interactions"
-                />
-              </th>
               <th>ID</th>
               <th>Channel</th>
               <th>Agent Assigned</th>
@@ -363,7 +317,7 @@ export function AdminContactsPage() {
           <tbody>
             {!loading && filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={13}>
+                <td colSpan={12}>
                   <p className="status-note">No interactions found.</p>
                 </td>
               </tr>
@@ -375,14 +329,6 @@ export function AdminContactsPage() {
 
               return (
                 <tr key={item.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(item.id)}
-                      onChange={() => toggleRow(item.id)}
-                      aria-label={`Select interaction ${item.id}`}
-                    />
-                  </td>
                   <td>
                     <span className="interaction-cell" title={item.id}>
                       {shortId(item.id)}

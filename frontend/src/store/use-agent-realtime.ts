@@ -56,6 +56,12 @@ export function useAgentRealtime() {
   const metrics = useMemo(
     () => ({
       pendingCount: pendingSessions.length,
+      pendingChatCount: pendingSessions.filter(
+        (session) => session.channel !== "gmail",
+      ).length,
+      pendingEmailCount: pendingSessions.filter(
+        (session) => session.channel === "gmail",
+      ).length,
       assignedCount: assignedSessions.length,
       onlineAgents: Object.values(agentStatuses).filter(Boolean).length,
       totalHandlingSeconds,
@@ -95,6 +101,7 @@ export function useAgentRealtime() {
           id: item.id,
           status: item.status,
           campaignName: item.campaignName,
+          channel: item.channel,
         })),
       );
 

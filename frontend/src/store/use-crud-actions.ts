@@ -48,16 +48,17 @@ export function useCrudActions() {
   );
 
   const runDelete = useCallback(
-    async <T>(
-      task: AsyncTask<T>,
+    async (
+      task: AsyncTask<unknown>,
       fallbackMessage: string,
-    ): Promise<T | undefined> => {
+    ): Promise<boolean> => {
       setDeleting(true);
       try {
-        return await task();
+        await task();
+        return true;
       } catch (caughtError) {
         showError(toErrorMessage(caughtError, fallbackMessage));
-        return undefined;
+        return false;
       } finally {
         setDeleting(false);
       }

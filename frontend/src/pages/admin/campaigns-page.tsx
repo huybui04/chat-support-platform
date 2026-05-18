@@ -58,7 +58,9 @@ export function AdminCampaignsPage() {
     null,
   );
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | Campaign["type"]>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | Campaign["type"]>(
+    "inbound",
+  );
 
   const { creating, savingId, deleting, runCreate, runSave, runDelete } =
     useCrudActions();
@@ -87,23 +89,31 @@ export function AdminCampaignsPage() {
     });
   }, [items, searchKeyword, typeFilter]);
 
-  const loadCampaigns = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await getCampaigns({ page, limit: PAGE_SIZE });
-      setItems(result.items);
-      setMeta(result.meta);
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to load campaigns",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
+  const loadCampaigns = useCallback(
+    async (targetPage: number = page) => {
+      setLoading(true);
+      setError("");
+      try {
+        const result = await getCampaigns({
+          page: targetPage,
+          limit: PAGE_SIZE,
+        });
+        setItems(result.items);
+        setMeta(result.meta);
+        return result;
+      } catch (caughtError) {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Failed to load campaigns",
+        );
+        return undefined;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page],
+  );
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -154,10 +164,13 @@ export function AdminCampaignsPage() {
       "Failed to delete campaign",
     );
 
-    if (deleted !== undefined) {
+    if (deleted) {
       showSuccess("Campaign deleted successfully");
       setCampaignIdToDelete(null);
-      await loadCampaigns();
+      const result = await loadCampaigns();
+      if (result && result.items.length === 0 && page > 1) {
+        setPage(page - 1);
+      }
     }
   };
 
@@ -242,99 +255,110 @@ export function AdminCampaignsPage() {
       </div> */}
 
       {activeTab === "create" ? (
-        <CrudFormCard
-          title="Create Campaign"
-          submitLabel="Create campaign"
-          submittingLabel="Creating..."
-          submitting={creating}
-          onSubmit={() => void handleCreate()}
-        >
-          <input
-            placeholder="Campaign name"
-            value={createForm.name}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({ ...prev, name: event.target.value }))
-            }
-          />
-          <input
-            placeholder="Description (optional)"
-            value={createForm.description}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                description: event.target.value,
-              }))
-            }
-          />
-          <select
-            value={createForm.status}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                status: event.target.value as Campaign["status"],
-              }))
-            }
+        <>
+          <div className="page-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setActiveTab("list")}
+            >
+              Back to list
+            </button>
+          </div>
+          <CrudFormCard
+            title="Create Campaign"
+            submitLabel="Create campaign"
+            submittingLabel="Creating..."
+            submitting={creating}
+            onSubmit={() => void handleCreate()}
           >
-            <option value="draft">draft</option>
-            <option value="active">active</option>
-            <option value="paused">paused</option>
-            <option value="completed">completed</option>
-          </select>
-          <select
-            value={createForm.channel}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                channel: event.target.value as Campaign["channel"],
-              }))
-            }
-          >
-            <option value="web">web</option>
-            <option value="whatsapp">whatsapp</option>
-            <option value="instagram">instagram</option>
-            <option value="messenger">messenger</option>
-            <option value="gmail">gmail</option>
-          </select>
-          <select
-            value={createForm.type}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                type: event.target.value as Campaign["type"],
-              }))
-            }
-          >
-            <option value="outbound">outbound</option>
-            <option value="inbound">inbound</option>
-          </select>
-          <input
-            type="datetime-local"
-            value={createForm.startDate}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                startDate: event.target.value,
-              }))
-            }
-          />
-          <input
-            type="datetime-local"
-            value={createForm.endDate}
-            disabled={creating}
-            onChange={(event) =>
-              setCreateForm((prev) => ({
-                ...prev,
-                endDate: event.target.value,
-              }))
-            }
-          />
-        </CrudFormCard>
+            <input
+              placeholder="Campaign name"
+              value={createForm.name}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({ ...prev, name: event.target.value }))
+              }
+            />
+            <input
+              placeholder="Description (optional)"
+              value={createForm.description}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+            />
+            <select
+              value={createForm.status}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  status: event.target.value as Campaign["status"],
+                }))
+              }
+            >
+              <option value="draft">draft</option>
+              <option value="active">active</option>
+              <option value="paused">paused</option>
+              <option value="completed">completed</option>
+            </select>
+            <select
+              value={createForm.channel}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  channel: event.target.value as Campaign["channel"],
+                }))
+              }
+            >
+              <option value="web">web</option>
+              <option value="whatsapp">whatsapp</option>
+              <option value="instagram">instagram</option>
+              <option value="messenger">messenger</option>
+              <option value="gmail">gmail</option>
+            </select>
+            <select
+              value={createForm.type}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  type: event.target.value as Campaign["type"],
+                }))
+              }
+            >
+              <option value="outbound">outbound</option>
+              <option value="inbound">inbound</option>
+            </select>
+            <input
+              type="datetime-local"
+              value={createForm.startDate}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  startDate: event.target.value,
+                }))
+              }
+            />
+            <input
+              type="datetime-local"
+              value={createForm.endDate}
+              disabled={creating}
+              onChange={(event) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  endDate: event.target.value,
+                }))
+              }
+            />
+          </CrudFormCard>
+        </>
       ) : null}
 
       {activeTab === "list" ? (

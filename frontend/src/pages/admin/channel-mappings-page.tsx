@@ -452,7 +452,7 @@ export function AdminChannelMappingsPage() {
       "Failed to remove channel mapping",
     );
 
-    if (deleted !== undefined) {
+    if (deleted) {
       showSuccess("Channel mapping removed");
       setMappingIdToDelete(null);
       await loadMappings();
