@@ -305,7 +305,6 @@ export function AdminContactsPage() {
               <th>Agent Assigned</th>
               <th>Contact</th>
               <th>Campaign</th>
-              <th>Skills Tagged</th>
               <th>Started Time</th>
               <th>Assigned Time</th>
               <th>Ended Time</th>
@@ -317,7 +316,7 @@ export function AdminContactsPage() {
           <tbody>
             {!loading && filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={12}>
+                <td colSpan={11}>
                   <p className="status-note">No interactions found.</p>
                 </td>
               </tr>
@@ -361,11 +360,6 @@ export function AdminContactsPage() {
                       title={item.campaignName ?? "-"}
                     >
                       {item.campaignName ?? "-"}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="interaction-cell" title="-">
-                      -
                     </span>
                   </td>
                   <td>

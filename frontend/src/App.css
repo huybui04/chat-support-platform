@@ -468,14 +468,6 @@ button.inline-action {
   font-weight: 700;
 }
 
-.role-tag {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #bcccdc;
-}
-
 .sidebar-user-name {
   margin: -8px 0 0;
   font-size: 14px;
@@ -666,7 +658,7 @@ button.inline-action {
 }
 
 .agent-header-profile-button {
-  width: 38px;
+  width: auto;
   height: 38px;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
@@ -675,8 +667,8 @@ button.inline-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0;
+  gap: 6px;
+  padding: 0 12px;
 }
 
 .agent-header-profile-button:hover {
@@ -688,6 +680,15 @@ button.inline-action {
   width: 18px;
   height: 18px;
   fill: currentColor;
+}
+
+.agent-header-profile-name {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .agent-header-chevron {
