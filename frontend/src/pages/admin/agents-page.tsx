@@ -76,10 +76,8 @@ export function AdminAgentsPage() {
   const [createTeamForm, setCreateTeamForm] =
     useState<TeamForm>(initialTeamForm);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-  const [passwordMode, setPasswordMode] = useState<"auto" | "manual">("manual");
   const [passwordValue, setPasswordValue] = useState("");
   const [passwordSaved, setPasswordSaved] = useState(false);
-  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: Mode;
@@ -203,7 +201,6 @@ export function AdminAgentsPage() {
           email: createAgentForm.email.trim(),
           role: createAgentForm.role,
           password: passwordValue,
-          requirePasswordChange,
           firstName: createAgentForm.firstName.trim(),
           lastName: createAgentForm.lastName.trim(),
           isActive: true,
@@ -214,9 +211,7 @@ export function AdminAgentsPage() {
     if (created) {
       setCreateAgentForm(initialCreateAgentForm);
       setPasswordValue("");
-      setPasswordMode("manual");
       setPasswordSaved(false);
-      setRequirePasswordChange(false);
       showSuccess("Agent created successfully");
       setShowCreate(false);
       await loadData();
@@ -392,7 +387,9 @@ export function AdminAgentsPage() {
 
                 <div className="agent-create-field agent-password-field">
                   <span>Password</span>
-                  <span className={`password-status ${passwordSaved ? "is-saved" : "is-pending"}`}>
+                  <span
+                    className={`password-status ${passwordSaved ? "is-saved" : "is-pending"}`}
+                  >
                     {passwordSaved ? "Saved" : "Not saved"}
                   </span>
                   <button
@@ -468,70 +465,23 @@ export function AdminAgentsPage() {
                     ×
                   </button>
                 </div>
-                <div className="password-options">
-                  <label>
-                    <input
-                      type="radio"
-                      name="password-mode"
-                      checked={passwordMode === "auto"}
-                      onChange={() => {
-                        setPasswordMode("auto");
-                        setPasswordSaved(false);
-                      }}
-                    />
-                    Auto generate password
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name="password-mode"
-                      checked={passwordMode === "manual"}
-                      onChange={() => {
-                        setPasswordMode("manual");
-                        setPasswordSaved(false);
-                      }}
-                    />
-                    Create password manually
-                  </label>
-                </div>
                 <label className="password-field">
                   Password*
                   <input
-                    type={passwordMode === "auto" ? "text" : "password"}
+                    type="password"
                     value={passwordValue}
-                    disabled={passwordMode === "auto"}
                     onChange={(event) => {
                       setPasswordValue(event.target.value);
                       setPasswordSaved(false);
                     }}
                   />
                 </label>
-                <label className="agent-toggle-field password-toggle">
-                  <span>Make user change password when first sign in</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={requirePasswordChange}
-                    aria-label="Toggle password change on first sign in"
-                    className={`slide-toggle ${requirePasswordChange ? "is-on" : "is-off"}`}
-                    onClick={() => setRequirePasswordChange((prev) => !prev)}
-                  >
-                    <span className="slide-toggle-knob" />
-                  </button>
-                </label>
                 <div className="page-actions">
                   <button
                     type="button"
                     onClick={() => {
-                      if (passwordMode === "manual" && !passwordValue.trim()) {
+                      if (!passwordValue.trim()) {
                         showError("Password is required");
-                        return;
-                      }
-
-                      if (passwordMode === "auto" && !passwordValue) {
-                        setPasswordValue(generatePassword());
-                        setPasswordSaved(false);
-                        showSuccess("Password generated. Click Save to confirm");
                         return;
                       }
 
@@ -742,15 +692,4 @@ function toOptionalText(value: string) {
   return trimmed ? trimmed : undefined;
 }
 
-function generatePassword(): string {
-  const chars =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-  const length = 12;
-  let result = "";
-
-  for (let i = 0; i < length; i += 1) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-
-  return result;
-}
+// password is entered manually now; auto-generation removed

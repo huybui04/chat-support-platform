@@ -426,7 +426,7 @@ export async function getAgents(
   query: PaginationQuery = {},
 ): Promise<PaginatedResult<User>> {
   const response = await apiRequest<ApiResponse<User[]>>(
-    `/users${toQueryString({ ...query, role: "agent" })}`,
+    `/users${toQueryString({ ...query })}`,
   );
   return { items: response.data, meta: response.meta };
 }
