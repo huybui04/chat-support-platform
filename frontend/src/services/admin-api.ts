@@ -123,9 +123,13 @@ export type UpdateCampaignPayload = Omit<
 };
 
 export type CreateAgentPayload = {
-  keycloakId: string;
+  username: string;
   fullName: string;
   email: string;
+  password: string;
+  requirePasswordChange?: boolean;
+  firstName?: string;
+  lastName?: string;
   role?: User["role"];
   isActive?: boolean;
   isOnline?: boolean;
@@ -422,7 +426,7 @@ export async function getAgents(
   query: PaginationQuery = {},
 ): Promise<PaginatedResult<User>> {
   const response = await apiRequest<ApiResponse<User[]>>(
-    `/users${toQueryString({ ...query, role: "agent" })}`,
+    `/users${toQueryString({ ...query })}`,
   );
   return { items: response.data, meta: response.meta };
 }

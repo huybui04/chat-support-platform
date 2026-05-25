@@ -468,14 +468,6 @@ button.inline-action {
   font-weight: 700;
 }
 
-.role-tag {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #bcccdc;
-}
-
 .sidebar-user-name {
   margin: -8px 0 0;
   font-size: 14px;
@@ -666,7 +658,7 @@ button.inline-action {
 }
 
 .agent-header-profile-button {
-  width: 38px;
+  width: auto;
   height: 38px;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
@@ -675,8 +667,8 @@ button.inline-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0;
+  gap: 6px;
+  padding: 0 12px;
 }
 
 .agent-header-profile-button:hover {
@@ -688,6 +680,15 @@ button.inline-action {
   width: 18px;
   height: 18px;
   fill: currentColor;
+}
+
+.agent-header-profile-name {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .agent-header-chevron {
@@ -1855,6 +1856,180 @@ button.inline-action {
   margin-top: 8px;
   display: grid;
   gap: 12px;
+}
+
+.agent-create-flow {
+  margin-top: 12px;
+  display: grid;
+  gap: 18px;
+}
+
+.agent-create-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.agent-create-step {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.agent-create-grid {
+  display: grid;
+  grid-template-columns: 200px repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+  align-items: start;
+}
+
+.agent-create-avatar {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.agent-avatar-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+}
+
+.agent-avatar-circle svg {
+  width: 36px;
+  height: 36px;
+  fill: currentColor;
+}
+
+.agent-upload-link {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.agent-upload-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.agent-create-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.agent-create-field input,
+.agent-create-field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #f8fafc;
+}
+
+.agent-password-field {
+  justify-content: center;
+  align-items: start;
+}
+
+.agent-toggle-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.agent-create-footer {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.password-dialog {
+  width: min(460px, 100%);
+  padding: 16px 18px 18px;
+}
+
+.password-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.icon-button {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.password-options {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.password-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-field {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.password-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #f8fafc;
+}
+
+.password-toggle {
+  margin-top: 10px;
+  justify-content: space-between;
+}
+
+@media (max-width: 900px) {
+  .agent-create-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .agent-detail-page {

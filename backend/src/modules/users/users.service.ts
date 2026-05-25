@@ -12,6 +12,7 @@ import type { AuthUser } from '../../common/auth/auth-user.type';
 import { UserRole } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
 import { CreateUserDto } from './dto/create-user.dto';
+import { KeycloakAdminService } from './keycloak-admin.service';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -22,6 +23,7 @@ export class UsersService {
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     private readonly chatGateway: ChatGateway,
+    private readonly keycloakAdminService: KeycloakAdminService,
   ) {}
 
   async findAll(query: ListUsersQueryDto) {
@@ -123,8 +125,19 @@ export class UsersService {
   }
 
   async create(payload: CreateUserDto): Promise<User> {
+    const keycloakId = await this.keycloakAdminService.createUser({
+      username: payload.username,
+      email: payload.email,
+      fullName: payload.fullName,
+      role: payload.role,
+      password: payload.password,
+      requirePasswordChange: payload.requirePasswordChange ?? false,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+    });
+
     const user = this.usersRepository.create({
-      keycloakId: payload.keycloakId,
+      keycloakId,
       email: payload.email,
       fullName: payload.fullName,
       role: payload.role,
@@ -132,7 +145,12 @@ export class UsersService {
       isOnline: payload.isOnline ?? false,
     });
 
-    return this.usersRepository.save(user);
+    try {
+      return await this.usersRepository.save(user);
+    } catch (error) {
+      await this.keycloakAdminService.deleteUser(keycloakId);
+      throw error;
+    }
   }
 
   async update(id: string, payload: UpdateUserDto): Promise<User> {
