@@ -258,6 +258,7 @@ export class ReportsService {
           'active_sessions',
           'completed_sessions',
           'abandoned_sessions',
+          'avg_response_time_seconds',
           'avg_session_duration_seconds',
           'channel_filter',
           'window',
@@ -268,6 +269,7 @@ export class ReportsService {
           String(sessions.byStatus.active),
           String(sessions.byStatus.completed),
           String(sessions.byStatus.abandoned),
+          String(Math.round(sessions.avgResponseTimeSeconds ?? 0)),
           String(Math.round(sessions.avgSessionDurationSeconds)),
           query.channel ?? 'all',
           query.window ?? ReportsTimeWindow.ALL,
@@ -827,10 +829,66 @@ export class ReportsService {
       avgDuration: string | null;
     }>();
 
+    const firstCustomerSubQuery = this.messagesRepository
+      .createQueryBuilder('m_customer')
+      .select('m_customer.sessionId', 'session_id')
+      .addSelect('MIN(m_customer.createdAt)', 'first_customer_at')
+      .where('m_customer.senderType = :customerSenderType', {
+        customerSenderType: MessageSenderType.CUSTOMER,
+      })
+      .groupBy('m_customer.sessionId');
+
+    const firstAgentSubQuery = this.messagesRepository
+      .createQueryBuilder('m_agent')
+      .select('m_agent.sessionId', 'session_id')
+      .addSelect('MIN(m_agent.createdAt)', 'first_agent_at')
+      .where('m_agent.senderType = :agentSenderType', {
+        agentSenderType: MessageSenderType.AGENT,
+      })
+      .groupBy('m_agent.sessionId');
+
+    const responseTimeQb = this.sessionsRepository
+      .createQueryBuilder('s')
+      .select(
+        'AVG(EXTRACT(EPOCH FROM (first_agent.first_agent_at - first_customer.first_customer_at)))',
+        'avgResponse',
+      )
+      .innerJoin(
+        `(${firstCustomerSubQuery.getQuery()})`,
+        'first_customer',
+        'first_customer.session_id = s.id',
+      )
+      .innerJoin(
+        `(${firstAgentSubQuery.getQuery()})`,
+        'first_agent',
+        'first_agent.session_id = s.id AND first_agent.first_agent_at >= first_customer.first_customer_at',
+      )
+      .setParameters({
+        ...firstCustomerSubQuery.getParameters(),
+        ...firstAgentSubQuery.getParameters(),
+      });
+
+    if (query.channel) {
+      responseTimeQb.andWhere('s.channel = :channel', {
+        channel: query.channel,
+      });
+    }
+
+    if (windowStartAt) {
+      responseTimeQb.andWhere('s.createdAt >= :windowStartAt', {
+        windowStartAt,
+      });
+    }
+
+    const responseRaw = await responseTimeQb.getRawOne<{
+      avgResponse: string | null;
+    }>();
+
     return {
       totalSessions,
       byStatus,
       avgSessionDurationSeconds: Number(durationRaw?.avgDuration ?? 0),
+      avgResponseTimeSeconds: Number(responseRaw?.avgResponse ?? 0),
     };
   }
 

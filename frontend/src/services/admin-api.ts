@@ -219,6 +219,7 @@ export type SessionsReport = {
     abandoned: number;
   };
   avgSessionDurationSeconds: number;
+  avgResponseTimeSeconds: number;
 };
 
 export type CampaignContactsImportResult = {
