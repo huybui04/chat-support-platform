@@ -53,7 +53,7 @@ function formatChannel(channel: ChatSession["channel"]): string {
     return "Gmail";
   }
 
-  return "Web";
+  return "Chat";
 }
 
 export function AgentEmailListPage() {

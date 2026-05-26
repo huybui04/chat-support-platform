@@ -34,7 +34,7 @@ const initialForm: CampaignForm = {
   name: "",
   description: "",
   status: "draft",
-  channel: "web",
+  channel: "whatsapp",
   type: "outbound",
   startDate: "",
   endDate: "",
@@ -316,7 +316,9 @@ export function AdminCampaignsPage() {
                 }))
               }
             >
-              <option value="web">web</option>
+              <option value="web" hidden>
+                web
+              </option>
               <option value="whatsapp">whatsapp</option>
               <option value="instagram">instagram</option>
               <option value="messenger">messenger</option>
@@ -558,7 +560,9 @@ export function AdminCampaignsPage() {
                   }))
                 }
               >
-                <option value="web">web</option>
+                <option value="web" hidden>
+                  web
+                </option>
                 <option value="whatsapp">whatsapp</option>
                 <option value="instagram">instagram</option>
                 <option value="messenger">messenger</option>

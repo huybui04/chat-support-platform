@@ -51,7 +51,7 @@ function formatChannelLabel(channel?: ChatSession["channel"]) {
     return "Gmail";
   }
 
-  return "Web";
+  return "Chat";
 }
 
 function isGmailSession(channel?: ChatSession["channel"]) {

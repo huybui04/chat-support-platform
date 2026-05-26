@@ -20,6 +20,16 @@ export type ChatSession = {
 
 export type SessionDetails = ChatSession;
 
+export type CampaignSummary = {
+  id: string;
+  name: string;
+  status: "draft" | "active" | "paused" | "completed";
+  channel: "web" | "whatsapp" | "instagram" | "messenger" | "gmail";
+  type: "inbound" | "outbound";
+  startDate: string | null;
+  endDate: string | null;
+};
+
 export type ChatMessage = {
   id: string;
   sessionId: string;
@@ -122,4 +132,12 @@ export async function getSessionMessages(
   );
 
   return { items: response.data, meta: response.meta };
+}
+
+export async function getMyCampaigns(): Promise<CampaignSummary[]> {
+  const response = await apiRequest<ApiResponse<CampaignSummary[]>>(
+    "/campaigns/me",
+  );
+
+  return response.data;
 }

@@ -39,6 +39,13 @@ export class CampaignsController {
     return apiSuccess(result.items, result.meta);
   }
 
+  @Get('me')
+  @Roles(UserRole.AGENT, UserRole.SUPERVISOR)
+  async myCampaigns(@CurrentUser() user: AuthUser) {
+    const items = await this.campaignsService.listMyActiveCampaigns(user);
+    return apiSuccess(items);
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string) {
     const campaign = await this.campaignsService.findById(id);

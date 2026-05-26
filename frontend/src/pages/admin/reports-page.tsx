@@ -459,7 +459,6 @@ export function AdminReportsPage() {
               }}
             >
               <option value="all">All channels</option>
-              <option value="web">Web</option>
               <option value="whatsapp">WhatsApp</option>
               <option value="instagram">Instagram</option>
               <option value="messenger">Messenger</option>

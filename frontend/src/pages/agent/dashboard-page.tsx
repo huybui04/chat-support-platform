@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { getMyTeamMembers, type User } from "../../services/admin-api";
+import { getMyCampaigns, type CampaignSummary } from "../../services/agent-api";
 import { useAgentRealtime } from "../../store/use-agent-realtime";
 
 export function AgentDashboardPage() {
   const {
-    pendingSessions,
     assignedSessions,
     completedSessions,
     activeEmailSessions,
@@ -16,6 +16,8 @@ export function AgentDashboardPage() {
 
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
   const [teamLoading, setTeamLoading] = useState(true);
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +41,31 @@ export function AgentDashboardPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    setCampaignsLoading(true);
+    getMyCampaigns()
+      .then((items) => {
+        if (mounted) {
+          setCampaigns(items);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setCampaigns([]);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setCampaignsLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const teamRows = buildTeamRows(
     teamMembers,
     assignedSessions,
@@ -47,7 +74,6 @@ export function AgentDashboardPage() {
     agentAvgHandlingSecondsMap,
     agentEmailAvgHandlingSecondsMap,
   );
-  const campaigns = buildCampaigns(pendingSessions, assignedSessions);
 
   return (
     <main className="agent-dashboard-page">
@@ -151,10 +177,14 @@ export function AgentDashboardPage() {
             </header>
 
             <ul>
-              {campaigns.length === 0 ? (
+              {campaignsLoading ? (
+                <li>Loading campaigns...</li>
+              ) : campaigns.length === 0 ? (
                 <li>No active campaign</li>
               ) : (
-                campaigns.map((campaign) => <li key={campaign}>{campaign}</li>)
+                campaigns.map((campaign) => (
+                  <li key={campaign.id}>{campaign.name}</li>
+                ))
               )}
             </ul>
 
@@ -247,21 +277,6 @@ function buildTeamRows(
     avgEmailHandlingTime: formatDuration(agentEmailAvgMap[member.id] ?? 0),
     isOnline: member.isOnline,
   }));
-}
-
-function buildCampaigns(
-  pending: Array<{ campaignName?: string | null }>,
-  assigned: Array<{ campaignName?: string | null }>,
-) {
-  const names = new Set<string>();
-
-  for (const item of [...pending, ...assigned]) {
-    if (item.campaignName?.trim()) {
-      names.add(item.campaignName.trim());
-    }
-  }
-
-  return Array.from(names).slice(0, 8);
 }
 
 function formatDuration(totalSeconds: number) {

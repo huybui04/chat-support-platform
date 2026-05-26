@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { parse } from 'csv-parse/sync';
 import { FindOptionsWhere, Repository } from 'typeorm';
 
+import type { AuthUser } from '../../common/auth/auth-user.type';
 import {
   Campaign,
   CampaignAgent,
   CampaignContact,
   CampaignContactStatus,
   CampaignTeam,
+  CampaignStatus,
   ChatSession,
   ChatSessionStatus,
   Contact,
@@ -88,6 +90,47 @@ export class CampaignsService {
         total,
       },
     };
+  }
+
+  async listMyActiveCampaigns(currentUser: AuthUser): Promise<Campaign[]> {
+    const currentAgent = await this.usersRepository.findOne({
+      where: { keycloakId: currentUser.sub },
+      select: { id: true },
+    });
+
+    if (!currentAgent) {
+      throw new NotFoundException('User not found');
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    return this.campaignsRepository
+      .createQueryBuilder('campaign')
+      .where('campaign.status = :status', { status: CampaignStatus.ACTIVE })
+      .andWhere('(campaign.startDate IS NULL OR campaign.startDate <= :today)', {
+        today,
+      })
+      .andWhere('(campaign.endDate IS NULL OR campaign.endDate >= :today)', {
+        today,
+      })
+      .andWhere(
+        `(
+          campaign.id IN (
+            SELECT ca.campaign_id
+            FROM campaign_agents ca
+            WHERE ca.agent_id = :currentAgentUserId
+          )
+          OR campaign.id IN (
+            SELECT ct.campaign_id
+            FROM campaign_teams ct
+            INNER JOIN team_members tm ON tm.team_id = ct.team_id
+            WHERE tm.user_id = :currentAgentUserId
+          )
+        )`,
+        { currentAgentUserId: currentAgent.id },
+      )
+      .orderBy('campaign.createdAt', 'DESC')
+      .getMany();
   }
 
   async findById(id: string): Promise<Campaign> {

@@ -12,7 +12,6 @@ import type { ApiMeta } from "../../types/api";
 const PAGE_SIZE = 20;
 
 const CHANNEL_OPTIONS: Array<InteractionSession["channel"]> = [
-  "web",
   "whatsapp",
   "instagram",
   "messenger",

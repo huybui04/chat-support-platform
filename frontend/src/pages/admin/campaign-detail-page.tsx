@@ -84,7 +84,7 @@ export function AdminCampaignDetailPage() {
 
   const inboundOrOutbound =
     campaign?.type === "inbound" ? "Inbound" : "Outbound";
-  const mappingChannel = campaign?.channel ?? "web";
+  const mappingChannel = campaign?.channel ?? "whatsapp";
   const isGmailMapping = mappingChannel === "gmail";
   const isMappingSupported = mappingChannel !== "web";
   const hasGmailAccount = gmailAccounts.length > 0;
