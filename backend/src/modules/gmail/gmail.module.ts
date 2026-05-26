@@ -14,6 +14,7 @@ import {
 } from '../../database/entities';
 import { ChatModule } from '../chat/chat.module';
 import { SessionsModule } from '../sessions/sessions.module';
+import { AiModule } from '../ai/ai.module';
 import { GmailController } from './gmail.controller';
 import { GmailService } from './gmail.service';
 
@@ -32,6 +33,7 @@ import { GmailService } from './gmail.service';
     ]),
     forwardRef(() => SessionsModule),
     forwardRef(() => ChatModule),
+    AiModule,
   ],
   controllers: [GmailController],
   providers: [GmailService],

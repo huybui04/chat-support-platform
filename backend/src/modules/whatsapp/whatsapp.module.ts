@@ -13,6 +13,7 @@ import {
 } from '../../database/entities';
 import { ChatModule } from '../chat/chat.module';
 import { SessionsModule } from '../sessions/sessions.module';
+import { AiModule } from '../ai/ai.module';
 import { InstagramInboundAdapter } from './adapters/instagram-inbound.adapter';
 import { MessengerInboundAdapter } from './adapters/messenger-inbound.adapter';
 import { MetaInboundAdapterRegistry } from './adapters/meta-inbound-adapter.registry';
@@ -37,6 +38,7 @@ import { WhatsappService } from './whatsapp.service';
     ]),
     SessionsModule,
     ChatModule,
+    AiModule,
   ],
   controllers: [WhatsappController, MetaWebhookAliasController],
   providers: [

@@ -34,6 +34,7 @@ import {
 } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
 import { SessionsService } from '../sessions/sessions.service';
+import { AiService } from '../ai/ai.service';
 
 const DEFAULT_GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
@@ -104,6 +105,7 @@ export class GmailService {
     private readonly sessionsService: SessionsService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
+    private readonly aiService: AiService,
   ) {}
 
   buildOAuthAuthorizeUrl(returnUrl?: string) {
@@ -285,8 +287,11 @@ export class GmailService {
 
     if (originalMessage?.externalMessageId) {
       // Use original subject and prepend Re: if not present
-      const origSubj = originalMessage.subject || `Support reply - ${campaign.name}`;
-      subject = origSubj.toLowerCase().startsWith('re:') ? origSubj : `Re: ${origSubj}`;
+      const origSubj =
+        originalMessage.subject || `Support reply - ${campaign.name}`;
+      subject = origSubj.toLowerCase().startsWith('re:')
+        ? origSubj
+        : `Re: ${origSubj}`;
       replyToMessageId = originalMessage.rfcMessageId as string | null;
       replyThreadId = originalMessage.externalThreadId as string | null;
     }
@@ -685,11 +690,56 @@ export class GmailService {
 
     this.chatGateway.emitSessionMessage(session.id, chatMessage);
 
+    await this.maybeAutoReplyForInbound({
+      session,
+      campaign,
+      contact,
+      customerMessage: bodyText,
+    });
+
     if (createdSession) {
       this.logger.debug(`Created Gmail session ${session.id}`);
     }
 
     return true;
+  }
+
+  private async maybeAutoReplyForInbound(input: {
+    session: ChatSession;
+    campaign: Campaign;
+    contact: Contact;
+    customerMessage: string;
+  }) {
+    if (!this.aiService.isAutoReplyEnabled(SessionChannel.GMAIL)) {
+      return;
+    }
+
+    const reply = await this.aiService.generateAutoReply({
+      channel: SessionChannel.GMAIL,
+      campaignName: input.campaign.name,
+      customerName: input.contact.fullName,
+      customerMessage: input.customerMessage,
+    });
+
+    if (!reply) {
+      return;
+    }
+
+    await this.sendOutboundMessage(input.session, reply);
+
+    const message = await this.messagesRepository.save(
+      this.messagesRepository.create({
+        sessionId: input.session.id,
+        senderType: MessageSenderType.AGENT,
+        senderId: null,
+        content: reply,
+        messageType: MessageType.TEXT,
+        attachmentUrl: null,
+        isRead: false,
+      }),
+    );
+
+    this.chatGateway.emitSessionMessage(input.session.id, message);
   }
 
   private async resolveCampaignByAccount(accountEmail: string) {
