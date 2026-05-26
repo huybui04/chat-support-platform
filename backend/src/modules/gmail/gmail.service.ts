@@ -34,6 +34,7 @@ import {
 } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
 import { SessionsService } from '../sessions/sessions.service';
+import { AiService } from '../ai/ai.service';
 
 const DEFAULT_GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
@@ -72,7 +73,8 @@ type GmailMessage = {
   labelIds?: string[];
   payload?: {
     headers?: Array<{ name: string; value: string }>;
-    body?: { data?: string };
+    body?: { data?: string; attachmentId?: string };
+    mimeType?: string;
     parts?: Array<GmailMessage['payload']>;
   };
 };
@@ -104,6 +106,7 @@ export class GmailService {
     private readonly sessionsService: SessionsService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
+    private readonly aiService: AiService,
   ) {}
 
   buildOAuthAuthorizeUrl(returnUrl?: string) {
@@ -285,16 +288,21 @@ export class GmailService {
 
     if (originalMessage?.externalMessageId) {
       // Use original subject and prepend Re: if not present
-      const origSubj = originalMessage.subject || `Support reply - ${campaign.name}`;
-      subject = origSubj.toLowerCase().startsWith('re:') ? origSubj : `Re: ${origSubj}`;
+      const origSubj =
+        originalMessage.subject || `Support reply - ${campaign.name}`;
+      subject = origSubj.toLowerCase().startsWith('re:')
+        ? origSubj
+        : `Re: ${origSubj}`;
       replyToMessageId = originalMessage.rfcMessageId as string | null;
       replyThreadId = originalMessage.externalThreadId as string | null;
     }
 
+    const emailBody = buildQuotedReplyBody(content, originalMessage?.content);
+
     const rawMessage = buildRawEmail({
       to: recipientEmail,
       subject,
-      body: content,
+      body: emailBody,
       inReplyTo: replyToMessageId ?? undefined,
       references: replyToMessageId ?? undefined,
     });
@@ -662,7 +670,7 @@ export class GmailService {
     }
 
     const bodyText =
-      extractBodyText(message.payload) ||
+      (await this.resolveMessageBodyText(account, message)) ||
       message.snippet ||
       subjectHeader ||
       '';
@@ -685,11 +693,56 @@ export class GmailService {
 
     this.chatGateway.emitSessionMessage(session.id, chatMessage);
 
+    await this.maybeAutoReplyForInbound({
+      session,
+      campaign,
+      contact,
+      customerMessage: bodyText,
+    });
+
     if (createdSession) {
       this.logger.debug(`Created Gmail session ${session.id}`);
     }
 
     return true;
+  }
+
+  private async maybeAutoReplyForInbound(input: {
+    session: ChatSession;
+    campaign: Campaign;
+    contact: Contact;
+    customerMessage: string;
+  }) {
+    if (!this.aiService.isAutoReplyEnabled(SessionChannel.GMAIL)) {
+      return;
+    }
+
+    const reply = await this.aiService.generateAutoReply({
+      channel: SessionChannel.GMAIL,
+      campaignName: input.campaign.name,
+      customerName: input.contact.fullName,
+      customerMessage: input.customerMessage,
+    });
+
+    if (!reply) {
+      return;
+    }
+
+    await this.sendOutboundMessage(input.session, reply);
+
+    const message = await this.messagesRepository.save(
+      this.messagesRepository.create({
+        sessionId: input.session.id,
+        senderType: MessageSenderType.AGENT,
+        senderId: null,
+        content: reply,
+        messageType: MessageType.TEXT,
+        attachmentUrl: null,
+        isRead: false,
+      }),
+    );
+
+    this.chatGateway.emitSessionMessage(input.session.id, message);
   }
 
   private async resolveCampaignByAccount(accountEmail: string) {
@@ -890,6 +943,57 @@ export class GmailService {
 
     return null;
   }
+
+  private async resolveMessageBodyText(
+    account: GmailAccount,
+    message: GmailMessage,
+  ) {
+    const payload = message.payload;
+    if (!payload) {
+      return '';
+    }
+
+    const preferredPart = findPreferredBodyPart(payload) ?? payload;
+    const inlineData = preferredPart.body?.data;
+    if (inlineData) {
+      return decodeBase64(inlineData);
+    }
+
+    const attachmentId = preferredPart.body?.attachmentId;
+    if (!attachmentId || !message.id) {
+      return '';
+    }
+
+    const accessToken = await this.getAccessToken(account);
+    const attachmentData = await this.getAttachmentData(
+      accessToken,
+      message.id,
+      attachmentId,
+    );
+
+    return attachmentData ? decodeBase64(attachmentData) : '';
+  }
+
+  private async getAttachmentData(
+    accessToken: string,
+    messageId: string,
+    attachmentId: string,
+  ) {
+    const response = await fetch(
+      `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new BadGatewayException(
+        `Gmail attachment fetch failed (${response.status}): ${errorBody}`,
+      );
+    }
+
+    const data = (await response.json()) as { data?: string };
+    return data.data ?? '';
+  }
 }
 
 function isPrimaryInboxMessage(message: GmailMessage) {
@@ -1027,6 +1131,30 @@ function extractBodyText(payload?: GmailMessage['payload']): string {
   return '';
 }
 
+function flattenPayloadParts(payload: GmailMessage['payload']) {
+  const parts: GmailMessage['payload'][] = [];
+  const walk = (node?: GmailMessage['payload']) => {
+    if (!node) {
+      return;
+    }
+    parts.push(node);
+    for (const child of node.parts ?? []) {
+      walk(child);
+    }
+  };
+  walk(payload);
+  return parts;
+}
+
+function findPreferredBodyPart(payload: GmailMessage['payload']) {
+  const parts = flattenPayloadParts(payload);
+  const plain = parts.find((part) => part?.mimeType === 'text/plain');
+  if (plain) {
+    return plain;
+  }
+  return parts.find((part) => part?.mimeType === 'text/html');
+}
+
 function buildRawEmail(input: {
   to: string;
   subject: string;
@@ -1049,4 +1177,18 @@ function buildRawEmail(input: {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
+}
+
+function buildQuotedReplyBody(replyBody: string, quotedBody?: string | null) {
+  const trimmedQuotedBody = quotedBody?.trim();
+  if (!trimmedQuotedBody) {
+    return replyBody;
+  }
+
+  const quotedLines = trimmedQuotedBody
+    .split(/\r?\n/)
+    .map((line) => `> ${line}`)
+    .join('\n');
+
+  return `${replyBody}\n\nQuoted previous message\n${quotedLines}`;
 }

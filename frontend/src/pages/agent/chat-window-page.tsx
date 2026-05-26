@@ -597,7 +597,10 @@ export function AgentChatWindowPage() {
                   : `Re: ${session?.contactName ?? "message"}`);
               const fromAddress =
                 message.senderType === "agent"
-                  ? formatEmailAddress(session?.agentEmail ?? session?.agentName, "You")
+                  ? formatEmailAddress(
+                      session?.agentEmail ?? session?.agentName,
+                      "You",
+                    )
                   : formatEmailAddress(
                       session?.contactEmail ?? session?.contactName,
                       "customer@unknown.com",

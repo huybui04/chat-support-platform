@@ -23,13 +23,16 @@ import {
   ChatSessionStatus,
   Contact,
   MessageSenderType,
+  MessageType,
   SessionChannel,
   ExternalChannel,
   User,
   UserRole,
 } from '../../database/entities';
 import { ChatGateway } from '../chat/chat.gateway';
+import { ChatService } from '../chat/chat.service';
 import { SessionsService } from '../sessions/sessions.service';
+import { AiService } from '../ai/ai.service';
 import { type NormalizedInboundMessage } from './whatsapp-inbound.adapter';
 import { MetaInboundAdapterRegistry } from './adapters/meta-inbound-adapter.registry';
 import { WhatsappInboundMessageDto } from './dto/whatsapp-inbound-message.dto';
@@ -70,6 +73,8 @@ export class WhatsappService {
     private readonly usersRepository: Repository<User>,
     private readonly sessionsService: SessionsService,
     private readonly chatGateway: ChatGateway,
+    private readonly chatService: ChatService,
+    private readonly aiService: AiService,
     private readonly inboundAdapterRegistry: MetaInboundAdapterRegistry,
   ) {}
 
@@ -204,6 +209,14 @@ export class WhatsappService {
 
       this.chatGateway.emitSessionMessage(session.id, message);
 
+      await this.maybeAutoReplyForInbound({
+        session,
+        campaign,
+        contact,
+        inbound,
+        channel,
+      });
+
       processed.push({
         sessionId: session.id,
         messageId: message.id,
@@ -216,6 +229,47 @@ export class WhatsappService {
       totalProcessed: processed.length,
       processed,
     };
+  }
+
+  private async maybeAutoReplyForInbound(input: {
+    session: ChatSession;
+    campaign: Campaign;
+    contact: Contact;
+    inbound: NormalizedInboundMessage;
+    channel: ExternalChannel;
+  }) {
+    const sessionChannel = this.mapExternalToSessionChannel(input.channel);
+    if (!this.aiService.isAutoReplyEnabled(sessionChannel)) {
+      return;
+    }
+
+    const messageText = input.inbound.message?.trim();
+    const customerMessage =
+      messageText ||
+      (input.inbound.attachmentUrl ? 'Customer sent an attachment.' : '');
+
+    if (!customerMessage) {
+      return;
+    }
+
+    const reply = await this.aiService.generateAutoReply({
+      channel: sessionChannel,
+      campaignName: input.campaign.name,
+      customerName: input.contact.fullName,
+      customerMessage,
+    });
+
+    if (!reply) {
+      return;
+    }
+
+    const message = await this.chatService.saveIncomingMessage({
+      sessionId: input.session.id,
+      content: reply,
+      messageType: MessageType.TEXT,
+    });
+
+    this.chatGateway.emitSessionMessage(input.session.id, message);
   }
 
   private async resolveContact(
