@@ -47,6 +47,10 @@ export class AiService {
       return null;
     }
 
+    if (!this.isEligibleForAutoReply(message)) {
+      return null;
+    }
+
     const model =
       this.normalizeModelName(process.env.GEMINI_MODEL?.trim()) ||
       'gemini-1.5-flash';
@@ -236,5 +240,72 @@ export class AiService {
     }
 
     return fallback;
+  }
+
+  private isEligibleForAutoReply(message: string) {
+    const normalized = message.toLowerCase();
+
+    if (this.isGreetingMessage(normalized)) {
+      return true;
+    }
+
+    if (this.isSimpleFaqMessage(normalized)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private isGreetingMessage(message: string) {
+    const greetings = [
+      'hello',
+      'hi',
+      'hey',
+      'good morning',
+      'good afternoon',
+      'good evening',
+      'xin chao',
+      'chao',
+      'chao ban',
+      'alo',
+      'hey there',
+    ];
+
+    return greetings.some((token) => message.includes(token));
+  }
+
+  private isSimpleFaqMessage(message: string) {
+    const faqKeywords = [
+      'gia',
+      'bao nhieu',
+      'price',
+      'phi',
+      'cost',
+      'ho tro',
+      'support',
+      'lien he',
+      'contact',
+      'gio lam viec',
+      'working hours',
+      'dia chi',
+      'address',
+      'huong dan',
+      'cach',
+      'how to',
+      'how do i',
+      'account',
+      'dang nhap',
+      'mat khau',
+      'reset',
+      'doi mat khau',
+      'bao hanh',
+      'warranty',
+      'ship',
+      'van chuyen',
+      'giao hang',
+      'thoi gian giao',
+    ];
+
+    return faqKeywords.some((token) => message.includes(token));
   }
 }
