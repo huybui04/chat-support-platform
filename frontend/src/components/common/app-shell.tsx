@@ -466,10 +466,6 @@ export function AppShell() {
                   />
                   {profileMenuOpen ? (
                     <div className="agent-header-dropdown" role="menu">
-                      <button type="button" className="agent-header-menu-item">
-                        <ProfileIcon className="agent-header-menu-icon" />
-                        Profile
-                      </button>
                       <button
                         type="button"
                         className="agent-header-menu-item"
@@ -504,10 +500,6 @@ export function AppShell() {
                   />
                   {profileMenuOpen ? (
                     <div className="agent-header-dropdown" role="menu">
-                      <button type="button" className="agent-header-menu-item">
-                        <ProfileIcon className="agent-header-menu-icon" />
-                        Profile
-                      </button>
                       <button
                         type="button"
                         className="agent-header-menu-item"

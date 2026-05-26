@@ -21,11 +21,10 @@ type RealtimeSocketState =
   | "connected"
   | "error";
 type SessionTab = "pending" | "active" | "completed";
-type ChatInboxChannelFilter = "all" | "whatsapp" | "instagram" | "messenger";
+type ChatInboxChannelFilter = "all" | "whatsapp" | "messenger";
 
 const CHAT_INBOX_CHANNELS: ChatSession["channel"][] = [
   "whatsapp",
-  "instagram",
   "messenger",
 ];
 
@@ -510,7 +509,6 @@ export function AgentSessionListPage() {
         >
           <option value="all">All chat channels</option>
           <option value="whatsapp">WhatsApp</option>
-          <option value="instagram">Instagram</option>
           <option value="messenger">Messenger</option>
         </select>
       </div>

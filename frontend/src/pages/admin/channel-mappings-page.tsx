@@ -22,7 +22,6 @@ const PAGE_SIZE = 20;
 const CAMPAIGNS_FETCH_LIMIT = 100;
 const CHANNELS: ExternalChannel[] = [
   "whatsapp",
-  "instagram",
   "messenger",
   "gmail",
 ];
@@ -78,7 +77,6 @@ export function AdminChannelMappingsPage() {
       const value = searchParams.get("channel");
       if (
         value === "whatsapp" ||
-        value === "instagram" ||
         value === "messenger" ||
         value === "gmail"
       ) {
@@ -466,8 +464,8 @@ export function AdminChannelMappingsPage() {
           <p className="eyebrow">Supervisor Console</p>
           <h1>Channel Mapping Management</h1>
           <p>
-            Map external account identifiers from WhatsApp, Instagram,
-            Messenger, and Gmail into active campaigns for inbound routing.
+            Map external account identifiers from WhatsApp, Messenger, and Gmail
+            into active campaigns for inbound routing.
           </p>
         </div>
         <div className="channel-mapping-hero-meta">
@@ -540,7 +538,7 @@ export function AdminChannelMappingsPage() {
           <label>
             External Account ID
             <input
-              placeholder="phone_number_id / page_id / ig_business_id / gmail"
+              placeholder="phone_number_id / page_id / gmail"
               value={createForm.externalAccountId}
               disabled={creating}
               onChange={(event) =>
