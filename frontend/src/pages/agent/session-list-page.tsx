@@ -47,7 +47,7 @@ function formatChannel(channel: ChatSession["channel"]): string {
   }
 
   if (channel === "instagram") {
-    return "Instagram";
+    return "Chat";
   }
 
   if (channel === "messenger") {

@@ -13,7 +13,6 @@ const PAGE_SIZE = 20;
 
 const CHANNEL_OPTIONS: Array<InteractionSession["channel"]> = [
   "whatsapp",
-  "instagram",
   "messenger",
   "gmail",
 ];

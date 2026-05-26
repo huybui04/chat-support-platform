@@ -34,9 +34,8 @@ type DashboardState = {
   };
 };
 
-const CHAT_CHANNELS: Array<"whatsapp" | "instagram" | "messenger"> = [
+const CHAT_CHANNELS: Array<"whatsapp" | "messenger"> = [
   "whatsapp",
-  "instagram",
   "messenger",
 ];
 
