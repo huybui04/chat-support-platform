@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsUrl } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 type RedirectUriCarrier = {
@@ -32,4 +32,9 @@ export class AuthLoginDto {
     return value;
   })
   redirectUri: string;
+
+  @IsString()
+  @IsOptional()
+  realm?: string;
 }
+

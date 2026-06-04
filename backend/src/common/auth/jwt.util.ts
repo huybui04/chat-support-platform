@@ -3,6 +3,7 @@ import { AuthUser } from './auth-user.type';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
 interface JwtPayload {
+  iss?: string;
   sub?: string;
   email?: string;
   name?: string;
@@ -123,6 +124,7 @@ function buildAuthUserFromPayload(payload: JwtPayload): AuthUser | null {
 
 function toJwtPayload(payload: JWTPayload): JwtPayload {
   return {
+    iss: typeof payload.iss === 'string' ? payload.iss : undefined,
     sub: typeof payload.sub === 'string' ? payload.sub : undefined,
     email: typeof payload.email === 'string' ? payload.email : undefined,
     name: typeof payload.name === 'string' ? payload.name : undefined,
@@ -159,15 +161,25 @@ function isAudienceValidationError(error: unknown): boolean {
   );
 }
 
-function getKeycloakJwks() {
-  const issuer = process.env.KEYCLOAK_ISSUER?.trim();
-  if (!issuer) {
+function getKeycloakJwks(issuerFromToken?: string) {
+  const defaultIssuer = process.env.KEYCLOAK_ISSUER?.trim();
+  if (!defaultIssuer) {
     return null;
   }
 
-  const jwksUri =
-    process.env.KEYCLOAK_JWKS_URI?.trim() ||
-    `${issuer}/protocol/openid-connect/certs`;
+  let issuer = defaultIssuer;
+  if (issuerFromToken) {
+    const realmsIndex = defaultIssuer.indexOf('/realms/');
+    const defaultBase = realmsIndex !== -1 ? defaultIssuer.substring(0, realmsIndex) : defaultIssuer;
+    const tokenRealmsIndex = issuerFromToken.indexOf('/realms/');
+    const tokenBase = tokenRealmsIndex !== -1 ? issuerFromToken.substring(0, tokenRealmsIndex) : '';
+
+    if (tokenBase && defaultBase.replace(/\/$/, '') === tokenBase.replace(/\/$/, '')) {
+      issuer = issuerFromToken;
+    }
+  }
+
+  const jwksUri = `${issuer}/protocol/openid-connect/certs`;
 
   if (!cachedJwks || cachedJwksUri !== jwksUri) {
     cachedJwksUri = jwksUri;
@@ -185,7 +197,10 @@ function getKeycloakJwks() {
 export async function verifyAndBuildAuthUser(
   token: string,
 ): Promise<AuthUser | null> {
-  const keycloak = getKeycloakJwks();
+  const payload = decodeJwtPayload(token);
+  const issuerFromToken = payload?.iss;
+
+  const keycloak = getKeycloakJwks(issuerFromToken);
 
   // Keep local decoding fallback for environments where Keycloak is not configured.
   if (!keycloak) {
@@ -197,8 +212,8 @@ export async function verifyAndBuildAuthUser(
     : { issuer: keycloak.issuer };
 
   try {
-    const { payload } = await jwtVerify(token, keycloak.jwks, verifyOptions);
-    return buildAuthUserFromPayload(toJwtPayload(payload));
+    const { payload: verifiedPayload } = await jwtVerify(token, keycloak.jwks, verifyOptions);
+    return buildAuthUserFromPayload(toJwtPayload(verifiedPayload));
   } catch (error) {
     // Some Keycloak setups put the frontend client in `azp` while `aud` is `account`.
     if (
@@ -209,14 +224,14 @@ export async function verifyAndBuildAuthUser(
       throw error;
     }
 
-    const { payload } = await jwtVerify(token, keycloak.jwks, {
+    const { payload: verifiedPayload } = await jwtVerify(token, keycloak.jwks, {
       issuer: keycloak.issuer,
     });
 
-    if (payload.azp !== keycloak.clientId) {
+    if (verifiedPayload.azp !== keycloak.clientId) {
       throw error;
     }
 
-    return buildAuthUserFromPayload(toJwtPayload(payload));
+    return buildAuthUserFromPayload(toJwtPayload(verifiedPayload));
   }
 }

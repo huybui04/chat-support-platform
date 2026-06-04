@@ -4,4 +4,9 @@ export class AuthLogoutDto {
   @IsString()
   @IsOptional()
   refreshToken?: string;
+
+  @IsString()
+  @IsOptional()
+  realm?: string;
 }
+

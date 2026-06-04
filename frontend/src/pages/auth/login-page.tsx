@@ -17,6 +17,15 @@ export function LoginPage() {
   const [token, setToken] = useState("");
   const [role, setRole] = useState<UserRole>("agent");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [tenantId, setTenantId] = useState(() => {
+    const saved = window.localStorage.getItem("chat_platform_last_realm");
+    if (saved) return saved;
+
+    const issuer = import.meta.env.VITE_KEYCLOAK_ISSUER?.trim() || "";
+    const match = issuer.match(/\/realms\/([^/]+)$/);
+    return match ? match[1] : "";
+  });
 
   const callbackError = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -39,15 +48,32 @@ export function LoginPage() {
 
   const onKeycloakSignIn = async () => {
     setActionError(null);
+    const targetTenant = tenantId.trim();
+    if (!targetTenant) {
+      setActionError("Vui lòng nhập Tenant ID.");
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
-      await beginKeycloakLogin(from ?? fallback);
+      // Validate if the tenant/realm exists by fetching its openid-configuration
+      const defaultIssuer = import.meta.env.VITE_KEYCLOAK_ISSUER?.trim() || "";
+      const realmsIndex = defaultIssuer.indexOf("/realms/");
+      const baseUrl = realmsIndex !== -1 ? defaultIssuer.substring(0, realmsIndex) : defaultIssuer;
+      const wellKnownUrl = `${baseUrl.replace(/\/$/, "")}/realms/${targetTenant}/.well-known/openid-configuration`;
+
+      const response = await fetch(wellKnownUrl, { method: "GET" });
+      if (!response.ok) {
+        throw new Error("Tenant ID không tồn tại.");
+      }
+
+      window.localStorage.setItem("chat_platform_last_realm", targetTenant);
+      await beginKeycloakLogin(targetTenant, from ?? fallback);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to start Keycloak login.";
-      setActionError(message);
+      setActionError("The tenant ID does not exist or is invalid. Please check again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -63,10 +89,29 @@ export function LoginPage() {
         {keycloakEnabled ? (
           <>
             <p className="subtitle">
-              Sign in with Keycloak to access Admin Portal or Agent Portal.
+              Enter your Tenant ID to sign in to Admin Portal or Agent Portal.
             </p>
-            <button type="button" onClick={onKeycloakSignIn}>
-              Sign in with Keycloak
+            <label style={{ display: "grid", gap: "6px", marginBottom: "14px" }}>
+              <span style={{ fontSize: "12px", fontWeight: "700", color: "#475569" }}>Tenant ID</span>
+              <input
+                type="text"
+                value={tenantId}
+                onChange={(event) => setTenantId(event.target.value)}
+                placeholder="Enter your Tenant ID"
+                disabled={isLoading}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  border: "1px solid var(--line)",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  fontSize: "14px",
+                  fontFamily: "inherit",
+                }}
+              />
+            </label>
+            <button type="button" onClick={onKeycloakSignIn} disabled={!tenantId.trim() || isLoading}>
+              {isLoading ? "Validating..." : "Next"}
             </button>
           </>
         ) : (

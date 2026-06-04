@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { verifyAndBuildAuthUser } from '../../common/auth/jwt.util';
+import { verifyAndBuildAuthUser, decodeJwtPayload } from '../../common/auth/jwt.util';
 import { User } from '../../database/entities';
 
 import { AuthLoginDto } from './dto/auth-login.dto';
@@ -38,32 +38,45 @@ export class AuthService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
+  private getRealmFromToken(token: string): string | undefined {
+    const payload = decodeJwtPayload(token);
+    if (payload?.iss) {
+      const match = payload.iss.match(/\/realms\/([^/]+)$/);
+      if (match) {
+        return match[1];
+      }
+    }
+    return undefined;
+  }
+
   async login(payload: AuthLoginDto): Promise<AuthTokens> {
     const tokens = await this.requestToken({
       grant_type: 'authorization_code',
       code: payload.code,
       redirect_uri: payload.redirectUri,
       code_verifier: payload.codeVerifier,
-    });
+    }, payload.realm);
 
     await this.assertUserIsActive(tokens.accessToken);
     return tokens;
   }
 
   async refresh(payload: AuthRefreshDto): Promise<AuthTokens> {
+    const realm = this.getRealmFromToken(payload.refreshToken);
     const tokens = await this.requestToken({
       grant_type: 'refresh_token',
       refresh_token: payload.refreshToken,
-    });
+    }, realm);
 
     await this.assertUserIsActive(tokens.accessToken);
     return tokens;
   }
 
   async logout(payload: AuthLogoutDto): Promise<void> {
+    const realm = payload.realm || (payload.refreshToken ? this.getRealmFromToken(payload.refreshToken) : undefined);
     const clientId = this.getClientId();
     const clientSecret = process.env.KEYCLOAK_CLIENT_SECRET?.trim();
-    const endpoint = this.getLogoutEndpoint();
+    const endpoint = this.getLogoutEndpoint(realm);
 
     const body = new URLSearchParams({ client_id: clientId });
     if (clientSecret) {
@@ -87,10 +100,11 @@ export class AuthService {
 
   private async requestToken(
     params: Record<string, string>,
+    realm?: string,
   ): Promise<AuthTokens> {
     const clientId = this.getClientId();
     const clientSecret = process.env.KEYCLOAK_CLIENT_SECRET?.trim();
-    const endpoint = this.getTokenEndpoint();
+    const endpoint = this.getTokenEndpoint(realm);
 
     const body = new URLSearchParams({
       client_id: clientId,
@@ -125,10 +139,18 @@ export class AuthService {
     };
   }
 
-  private getIssuer(): string {
+  private getIssuer(realm?: string): string {
     const issuer = process.env.KEYCLOAK_ISSUER?.trim();
     if (!issuer) {
       throw new BadRequestException('Missing KEYCLOAK_ISSUER configuration.');
+    }
+
+    if (realm) {
+      const realmsIndex = issuer.indexOf('/realms/');
+      if (realmsIndex !== -1) {
+        const baseUrl = issuer.substring(0, realmsIndex);
+        return `${baseUrl}/realms/${realm}`;
+      }
     }
 
     return issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
@@ -145,12 +167,12 @@ export class AuthService {
     return clientId;
   }
 
-  private getTokenEndpoint(): string {
-    return `${this.getIssuer()}/protocol/openid-connect/token`;
+  private getTokenEndpoint(realm?: string): string {
+    return `${this.getIssuer(realm)}/protocol/openid-connect/token`;
   }
 
-  private getLogoutEndpoint(): string {
-    return `${this.getIssuer()}/protocol/openid-connect/logout`;
+  private getLogoutEndpoint(realm?: string): string {
+    return `${this.getIssuer(realm)}/protocol/openid-connect/logout`;
   }
 
   private async assertUserIsActive(accessToken: string): Promise<void> {

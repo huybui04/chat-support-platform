@@ -42,13 +42,42 @@ export function isKeycloakConfigured(): boolean {
   return Boolean(config.issuer && config.clientId);
 }
 
-export async function beginKeycloakLogin(returnPath?: string): Promise<void> {
-  const { issuer, clientId, scope, redirectUri } = readConfig();
-  if (!issuer || !clientId) {
+function decodeJwt(token: string): any {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+export async function beginKeycloakLogin(
+  realm: string,
+  returnPath?: string,
+): Promise<void> {
+  const { issuer: defaultIssuer, clientId, scope, redirectUri } = readConfig();
+  if (!defaultIssuer || !clientId) {
     throw new Error(
       "Missing Keycloak config. Set VITE_KEYCLOAK_ISSUER and VITE_KEYCLOAK_CLIENT_ID.",
     );
   }
+
+  const realmsIndex = defaultIssuer.indexOf("/realms/");
+  const baseUrl =
+    realmsIndex !== -1
+      ? defaultIssuer.substring(0, realmsIndex)
+      : defaultIssuer;
+  const issuer = `${baseUrl}/realms/${realm}`;
 
   const state = createRandomString(24);
   const verifier = createRandomString(64);
@@ -56,6 +85,7 @@ export async function beginKeycloakLogin(returnPath?: string): Promise<void> {
 
   window.sessionStorage.setItem(LOGIN_STATE_KEY, state);
   window.sessionStorage.setItem(LOGIN_VERIFIER_KEY, verifier);
+  window.sessionStorage.setItem("chat_platform_oidc_realm", realm);
   if (returnPath) {
     window.sessionStorage.setItem(LOGIN_RETURN_PATH_KEY, returnPath);
   }
@@ -74,6 +104,7 @@ export async function beginKeycloakLogin(returnPath?: string): Promise<void> {
   window.location.assign(authorizeUrl.toString());
 }
 
+
 export async function exchangeKeycloakCodeForToken(
   currentUrl: string = window.location.href,
 ): Promise<KeycloakTokenSet> {
@@ -89,6 +120,7 @@ export async function exchangeKeycloakCodeForToken(
   const returnedState = url.searchParams.get("state");
   const expectedState = window.sessionStorage.getItem(LOGIN_STATE_KEY);
   const verifier = window.sessionStorage.getItem(LOGIN_VERIFIER_KEY);
+  const realm = window.sessionStorage.getItem("chat_platform_oidc_realm");
 
   if (!code || !returnedState || !expectedState || !verifier) {
     throw new Error("Invalid Keycloak callback payload.");
@@ -104,6 +136,7 @@ export async function exchangeKeycloakCodeForToken(
     code,
     redirectUri: redirectUri,
     codeVerifier: verifier,
+    realm: realm || undefined,
   };
 
   const data = await authApiRequest<TokenResponse>("/auth/login", payload);
@@ -143,12 +176,30 @@ export async function beginKeycloakLogout(input?: {
   refreshToken?: string;
   idTokenHint?: string;
 }): Promise<void> {
-  const { issuer, clientId } = readConfig();
+  let { issuer, clientId } = readConfig();
+
+  const activeToken = input?.idTokenHint || input?.refreshToken;
+  if (activeToken) {
+    const decoded = decodeJwt(activeToken);
+    if (decoded?.iss) {
+      issuer = decoded.iss;
+    }
+  }
 
   if (input?.refreshToken) {
     try {
+      const decoded = decodeJwt(input.refreshToken);
+      let realm: string | undefined = undefined;
+      if (decoded?.iss) {
+        const match = decoded.iss.match(/\/realms\/([^/]+)$/);
+        if (match) {
+          realm = match[1];
+        }
+      }
+
       await authApiRequest<{ loggedOut: true }>("/auth/logout", {
         refreshToken: input.refreshToken,
+        realm,
       });
     } catch {
       // Ignore API failure and continue with browser redirect logout.
@@ -176,6 +227,7 @@ export async function beginKeycloakLogout(input?: {
   window.location.assign(logoutUrl.toString());
 }
 
+
 async function authApiRequest<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
@@ -201,6 +253,7 @@ export function consumePostLoginPath(): string | null {
 function clearPkceArtifacts() {
   window.sessionStorage.removeItem(LOGIN_STATE_KEY);
   window.sessionStorage.removeItem(LOGIN_VERIFIER_KEY);
+  window.sessionStorage.removeItem("chat_platform_oidc_realm");
 }
 
 function trimTrailingSlash(value: string): string {
