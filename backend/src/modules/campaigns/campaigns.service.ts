@@ -53,11 +53,11 @@ export class CampaignsService {
     private readonly csvImportLogsRepository: Repository<CsvImportLog>,
   ) {}
 
-  async findAll(query: ListCampaignsQueryDto) {
+  async findAll(query: ListCampaignsQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    const where: FindOptionsWhere<Campaign> = {};
+    const where: FindOptionsWhere<Campaign> = { tenantId };
 
     if (query.status) {
       where.status = query.status;
@@ -94,7 +94,7 @@ export class CampaignsService {
 
   async listMyActiveCampaigns(currentUser: AuthUser): Promise<Campaign[]> {
     const currentAgent = await this.usersRepository.findOne({
-      where: { keycloakId: currentUser.sub },
+      where: { keycloakId: currentUser.sub, tenantId: currentUser.tenantId || 'chat-support-platform' },
       select: { id: true },
     });
 
@@ -107,6 +107,7 @@ export class CampaignsService {
     return this.campaignsRepository
       .createQueryBuilder('campaign')
       .where('campaign.status = :status', { status: CampaignStatus.ACTIVE })
+      .andWhere('campaign.tenantId = :tenantId', { tenantId: currentUser.tenantId || 'chat-support-platform' })
       .andWhere('(campaign.startDate IS NULL OR campaign.startDate <= :today)', {
         today,
       })
@@ -133,8 +134,8 @@ export class CampaignsService {
       .getMany();
   }
 
-  async findById(id: string): Promise<Campaign> {
-    const campaign = await this.campaignsRepository.findOne({ where: { id } });
+  async findById(id: string, tenantId: string): Promise<Campaign> {
+    const campaign = await this.campaignsRepository.findOne({ where: { id, tenantId } });
 
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
@@ -143,7 +144,7 @@ export class CampaignsService {
     return campaign;
   }
 
-  async create(payload: CreateCampaignDto): Promise<Campaign> {
+  async create(payload: CreateCampaignDto, tenantId: string): Promise<Campaign> {
     const campaign = this.campaignsRepository.create({
       name: payload.name,
       description: payload.description ?? null,
@@ -153,13 +154,14 @@ export class CampaignsService {
       startDate: payload.startDate ?? null,
       endDate: payload.endDate ?? null,
       createdById: payload.createdById,
+      tenantId,
     });
 
     return this.campaignsRepository.save(campaign);
   }
 
-  async update(id: string, payload: UpdateCampaignDto): Promise<Campaign> {
-    const campaign = await this.findById(id);
+  async update(id: string, payload: UpdateCampaignDto, tenantId: string): Promise<Campaign> {
+    const campaign = await this.findById(id, tenantId);
 
     const merged = this.campaignsRepository.merge(campaign, {
       ...payload,
@@ -178,16 +180,17 @@ export class CampaignsService {
     return this.campaignsRepository.save(merged);
   }
 
-  async remove(id: string): Promise<void> {
-    const campaign = await this.findById(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    const campaign = await this.findById(id, tenantId);
     await this.campaignsRepository.remove(campaign);
   }
 
   async updateStatus(
     id: string,
     payload: UpdateCampaignStatusDto,
+    tenantId: string,
   ): Promise<Campaign> {
-    const campaign = await this.findById(id);
+    const campaign = await this.findById(id, tenantId);
     campaign.status = payload.status;
 
     return this.campaignsRepository.save(campaign);
@@ -196,11 +199,12 @@ export class CampaignsService {
   async assignAgent(
     id: string,
     payload: AssignCampaignAgentDto,
+    tenantId: string,
   ): Promise<CampaignAgent> {
-    await this.findById(id);
+    await this.findById(id, tenantId);
 
     const agent = await this.usersRepository.findOne({
-      where: { id: payload.agentId },
+      where: { id: payload.agentId, tenantId },
     });
     if (!agent || agent.role !== UserRole.AGENT) {
       throw new NotFoundException('Agent not found');
@@ -222,8 +226,8 @@ export class CampaignsService {
     return this.campaignAgentsRepository.save(assignment);
   }
 
-  async listAgents(id: string): Promise<CampaignAgent[]> {
-    await this.findById(id);
+  async listAgents(id: string, tenantId: string): Promise<CampaignAgent[]> {
+    await this.findById(id, tenantId);
 
     return this.campaignAgentsRepository.find({
       where: { campaignId: id },
@@ -232,8 +236,8 @@ export class CampaignsService {
     });
   }
 
-  async removeAgent(id: string, agentId: string): Promise<void> {
-    await this.findById(id);
+  async removeAgent(id: string, agentId: string, tenantId: string): Promise<void> {
+    await this.findById(id, tenantId);
 
     const assignment = await this.campaignAgentsRepository.findOne({
       where: { campaignId: id, agentId },
@@ -249,11 +253,12 @@ export class CampaignsService {
   async assignTeam(
     id: string,
     payload: AssignCampaignTeamDto,
+    tenantId: string,
   ): Promise<CampaignTeam> {
-    await this.findById(id);
+    await this.findById(id, tenantId);
 
     const team = await this.teamsRepository.findOne({
-      where: { id: payload.teamId },
+      where: { id: payload.teamId, tenantId },
     });
     if (!team) {
       throw new NotFoundException('Team not found');
@@ -275,8 +280,8 @@ export class CampaignsService {
     return this.campaignTeamsRepository.save(assignment);
   }
 
-  async listTeams(id: string): Promise<CampaignTeam[]> {
-    await this.findById(id);
+  async listTeams(id: string, tenantId: string): Promise<CampaignTeam[]> {
+    await this.findById(id, tenantId);
 
     return this.campaignTeamsRepository.find({
       where: { campaignId: id },
@@ -285,8 +290,8 @@ export class CampaignsService {
     });
   }
 
-  async removeTeam(id: string, teamId: string): Promise<void> {
-    await this.findById(id);
+  async removeTeam(id: string, teamId: string, tenantId: string): Promise<void> {
+    await this.findById(id, tenantId);
 
     const assignment = await this.campaignTeamsRepository.findOne({
       where: { campaignId: id, teamId },
@@ -299,8 +304,8 @@ export class CampaignsService {
     await this.campaignTeamsRepository.remove(assignment);
   }
 
-  async getStats(id: string): Promise<CampaignStatsDto> {
-    const campaign = await this.findById(id);
+  async getStats(id: string, tenantId: string): Promise<CampaignStatsDto> {
+    const campaign = await this.findById(id, tenantId);
 
     const totalContacts = await this.campaignContactsRepository.count({
       where: { campaignId: id },
@@ -358,8 +363,8 @@ export class CampaignsService {
     };
   }
 
-  async listCampaignContacts(id: string, query: ListCampaignContactsQueryDto) {
-    await this.findById(id);
+  async listCampaignContacts(id: string, query: ListCampaignContactsQueryDto, tenantId: string) {
+    await this.findById(id, tenantId);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -388,8 +393,9 @@ export class CampaignsService {
   async listCampaignImportLogs(
     id: string,
     query: ListCampaignContactsQueryDto,
+    tenantId: string,
   ) {
-    await this.findById(id);
+    await this.findById(id, tenantId);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -412,8 +418,9 @@ export class CampaignsService {
     file: Express.Multer.File,
     payload: ImportCampaignContactsDto,
     importedById: string,
+    tenantId: string,
   ) {
-    await this.findById(id);
+    await this.findById(id, tenantId);
 
     const log = this.csvImportLogsRepository.create({
       campaignId: id,

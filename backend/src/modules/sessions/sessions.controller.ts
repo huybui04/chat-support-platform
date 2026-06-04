@@ -27,8 +27,8 @@ export class SessionsController {
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string) {
-    const session = await this.sessionsService.findById(id);
+  async findById(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const session = await this.sessionsService.findById(id, user.tenantId || 'chat-support-platform');
     const { campaign, contact, agent, ...base } = session;
     return apiSuccess({
       ...base,
@@ -58,8 +58,8 @@ export class SessionsController {
   }
 
   @Post(':id/end')
-  async end(@Param('id') id: string) {
-    const session = await this.sessionsService.end(id);
+  async end(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const session = await this.sessionsService.end(id, user.tenantId || 'chat-support-platform');
     return apiSuccess(session);
   }
 
@@ -67,8 +67,9 @@ export class SessionsController {
   async listMessages(
     @Param('id') id: string,
     @Query() query: ListSessionMessagesQueryDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    const result = await this.sessionsService.listMessages(id, query);
+    const result = await this.sessionsService.listMessages(id, query, user.tenantId || 'chat-support-platform');
     return apiSuccess(result.items, result.meta);
   }
 }

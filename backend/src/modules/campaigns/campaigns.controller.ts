@@ -34,8 +34,11 @@ export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
   @Get()
-  async findAll(@Query() query: ListCampaignsQueryDto) {
-    const result = await this.campaignsService.findAll(query);
+  async findAll(
+    @Query() query: ListCampaignsQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.campaignsService.findAll(query, user.tenantId || 'chat-support-platform');
     return apiSuccess(result.items, result.meta);
   }
 
@@ -47,26 +50,33 @@ export class CampaignsController {
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string) {
-    const campaign = await this.campaignsService.findById(id);
+  async findById(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const campaign = await this.campaignsService.findById(id, user.tenantId || 'chat-support-platform');
     return apiSuccess(campaign);
   }
 
   @Post()
-  async create(@Body() payload: CreateCampaignDto) {
-    const campaign = await this.campaignsService.create(payload);
+  async create(
+    @Body() payload: CreateCampaignDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const campaign = await this.campaignsService.create(payload, user.tenantId || 'chat-support-platform');
     return apiSuccess(campaign);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() payload: UpdateCampaignDto) {
-    const campaign = await this.campaignsService.update(id, payload);
+  async update(
+    @Param('id') id: string,
+    @Body() payload: UpdateCampaignDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const campaign = await this.campaignsService.update(id, payload, user.tenantId || 'chat-support-platform');
     return apiSuccess(campaign);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.campaignsService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    await this.campaignsService.remove(id, user.tenantId || 'chat-support-platform');
     return apiSuccess({ id });
   }
 
@@ -74,8 +84,9 @@ export class CampaignsController {
   async updateStatus(
     @Param('id') id: string,
     @Body() payload: UpdateCampaignStatusDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    const campaign = await this.campaignsService.updateStatus(id, payload);
+    const campaign = await this.campaignsService.updateStatus(id, payload, user.tenantId || 'chat-support-platform');
     return apiSuccess(campaign);
   }
 
@@ -83,14 +94,15 @@ export class CampaignsController {
   async assignAgent(
     @Param('id') id: string,
     @Body() payload: AssignCampaignAgentDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    const assignment = await this.campaignsService.assignAgent(id, payload);
+    const assignment = await this.campaignsService.assignAgent(id, payload, user.tenantId || 'chat-support-platform');
     return apiSuccess(assignment);
   }
 
   @Get(':id/agents')
-  async listAgents(@Param('id') id: string) {
-    const items = await this.campaignsService.listAgents(id);
+  async listAgents(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const items = await this.campaignsService.listAgents(id, user.tenantId || 'chat-support-platform');
     return apiSuccess(items);
   }
 
@@ -98,8 +110,9 @@ export class CampaignsController {
   async removeAgent(
     @Param('id') id: string,
     @Param('agentId') agentId: string,
+    @CurrentUser() user: AuthUser,
   ) {
-    await this.campaignsService.removeAgent(id, agentId);
+    await this.campaignsService.removeAgent(id, agentId, user.tenantId || 'chat-support-platform');
     return apiSuccess({ id, agentId });
   }
 
@@ -107,26 +120,31 @@ export class CampaignsController {
   async assignTeam(
     @Param('id') id: string,
     @Body() payload: AssignCampaignTeamDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    const assignment = await this.campaignsService.assignTeam(id, payload);
+    const assignment = await this.campaignsService.assignTeam(id, payload, user.tenantId || 'chat-support-platform');
     return apiSuccess(assignment);
   }
 
   @Get(':id/teams')
-  async listTeams(@Param('id') id: string) {
-    const items = await this.campaignsService.listTeams(id);
+  async listTeams(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const items = await this.campaignsService.listTeams(id, user.tenantId || 'chat-support-platform');
     return apiSuccess(items);
   }
 
   @Delete(':id/teams/:teamId')
-  async removeTeam(@Param('id') id: string, @Param('teamId') teamId: string) {
-    await this.campaignsService.removeTeam(id, teamId);
+  async removeTeam(
+    @Param('id') id: string,
+    @Param('teamId') teamId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.campaignsService.removeTeam(id, teamId, user.tenantId || 'chat-support-platform');
     return apiSuccess({ id, teamId });
   }
 
   @Get(':id/stats')
-  async stats(@Param('id') id: string) {
-    const stats = await this.campaignsService.getStats(id);
+  async stats(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const stats = await this.campaignsService.getStats(id, user.tenantId || 'chat-support-platform');
     return apiSuccess(stats);
   }
 
@@ -134,8 +152,9 @@ export class CampaignsController {
   async listContacts(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: ListCampaignContactsQueryDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    const result = await this.campaignsService.listCampaignContacts(id, query);
+    const result = await this.campaignsService.listCampaignContacts(id, query, user.tenantId || 'chat-support-platform');
     return apiSuccess(result.items, result.meta);
   }
 
@@ -143,10 +162,12 @@ export class CampaignsController {
   async listImportLogs(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: ListCampaignContactsQueryDto,
+    @CurrentUser() user: AuthUser,
   ) {
     const result = await this.campaignsService.listCampaignImportLogs(
       id,
       query,
+      user.tenantId || 'chat-support-platform',
     );
     return apiSuccess(result.items, result.meta);
   }
@@ -164,6 +185,7 @@ export class CampaignsController {
       file,
       payload,
       user.sub,
+      user.tenantId || 'chat-support-platform',
     );
     return apiSuccess(result);
   }

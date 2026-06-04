@@ -29,6 +29,10 @@ export class Contact {
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, unknown> | null;
 
+  @Column({ name: 'tenant_id', type: 'varchar', length: 255, default: 'chat-support-platform' })
+  tenantId: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

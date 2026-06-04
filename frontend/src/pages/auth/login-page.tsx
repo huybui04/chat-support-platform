@@ -18,14 +18,7 @@ export function LoginPage() {
   const [role, setRole] = useState<UserRole>("agent");
   const [actionError, setActionError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [tenantId, setTenantId] = useState(() => {
-    const saved = window.localStorage.getItem("chat_platform_last_realm");
-    if (saved) return saved;
-
-    const issuer = import.meta.env.VITE_KEYCLOAK_ISSUER?.trim() || "";
-    const match = issuer.match(/\/realms\/([^/]+)$/);
-    return match ? match[1] : "";
-  });
+  const [tenantId, setTenantId] = useState("");
 
   const callbackError = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -50,7 +43,7 @@ export function LoginPage() {
     setActionError(null);
     const targetTenant = tenantId.trim();
     if (!targetTenant) {
-      setActionError("Vui lòng nhập Tenant ID.");
+      setActionError("Please enter Tenant ID.");
       return;
     }
 
@@ -65,7 +58,7 @@ export function LoginPage() {
 
       const response = await fetch(wellKnownUrl, { method: "GET" });
       if (!response.ok) {
-        throw new Error("Tenant ID không tồn tại.");
+        throw new Error("Tenant ID not exists.");
       }
 
       window.localStorage.setItem("chat_platform_last_realm", targetTenant);

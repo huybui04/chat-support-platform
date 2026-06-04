@@ -2,6 +2,8 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Res } from '@nestjs/common';
 import type { Response } from 'express';
 
+import type { AuthUser } from '../../common/auth/auth-user.type';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { apiSuccess } from '../../common/utils/api-response.util';
 import { UserRole } from '../../database/entities';
@@ -19,8 +21,14 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('campaigns')
-  async campaigns(@Query() query: ListReportsQueryDto) {
-    const result = await this.reportsService.getCampaignsOverview(query);
+  async campaigns(
+    @Query() query: ListReportsQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.reportsService.getCampaignsOverview(
+      query,
+      user.tenantId || 'chat-support-platform',
+    );
     return apiSuccess(result.items, result.meta);
   }
 
@@ -28,20 +36,37 @@ export class ReportsController {
   async campaignDetail(
     @Param('id') id: string,
     @Query() query: ListReportsQueryDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    const result = await this.reportsService.getCampaignDetail(id, query);
+    const result = await this.reportsService.getCampaignDetail(
+      id,
+      query,
+      user.tenantId || 'chat-support-platform',
+    );
     return apiSuccess(result);
   }
 
   @Get('agents')
-  async agents(@Query() query: ListReportsQueryDto) {
-    const result = await this.reportsService.getAgentsReport(query);
+  async agents(
+    @Query() query: ListReportsQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.reportsService.getAgentsReport(
+      query,
+      user.tenantId || 'chat-support-platform',
+    );
     return apiSuccess(result.items, result.meta);
   }
 
   @Get('sessions')
-  async sessions(@Query() query: ListReportsQueryDto) {
-    const result = await this.reportsService.getSessionsReport(query);
+  async sessions(
+    @Query() query: ListReportsQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.reportsService.getSessionsReport(
+      query,
+      user.tenantId || 'chat-support-platform',
+    );
     return apiSuccess(result);
   }
 
@@ -49,9 +74,12 @@ export class ReportsController {
   async exportFile(
     @Query() query: ExportReportsQueryDto,
     @Res({ passthrough: true }) response: Response,
+    @CurrentUser() user: AuthUser,
   ) {
+    const tenantId = user.tenantId || 'chat-support-platform';
+
     if (query.format === ReportsExportFormat.JSON) {
-      const result = await this.reportsService.buildJsonExport(query);
+      const result = await this.reportsService.buildJsonExport(query, tenantId);
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
       response.setHeader(
         'Content-Disposition',
@@ -90,10 +118,12 @@ export class ReportsController {
           ? this.reportsService.iterateCampaignExportRows(
               query.window,
               query.channel,
+              tenantId,
             )
           : this.reportsService.iterateAgentExportRows(
               query.window,
               query.channel,
+              tenantId,
             );
 
       for await (const row of rowIterator) {
@@ -104,7 +134,7 @@ export class ReportsController {
       return;
     }
 
-    const result = await this.reportsService.buildCsvExport(query);
+    const result = await this.reportsService.buildCsvExport(query, tenantId);
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
     response.setHeader(
       'Content-Disposition',
@@ -114,3 +144,4 @@ export class ReportsController {
     return result.csv;
   }
 }
+

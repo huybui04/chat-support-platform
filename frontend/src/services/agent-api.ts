@@ -38,6 +38,7 @@ export type ChatMessage = {
   content: string;
   subject?: string | null;
   messageType: "text" | "image" | "file" | "system";
+  attachmentUrl?: string | null;
   createdAt: string;
 };
 

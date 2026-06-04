@@ -35,9 +35,13 @@ export class GmailAccount {
   @Column({ name: 'watch_expiration', type: 'timestamp', nullable: true })
   watchExpiration: Date | null;
 
+  @Column({ name: 'tenant_id', type: 'varchar', length: 255, default: 'chat-support-platform' })
+  tenantId: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 }
+

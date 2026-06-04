@@ -55,13 +55,14 @@ export class ReportsService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
-  async getCampaignsOverview(query: ListReportsQueryDto) {
+  async getCampaignsOverview(query: ListReportsQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const windowStartAt = this.getWindowStartDate(query.window);
 
     const campaignsQb = this.campaignsRepository
       .createQueryBuilder('c')
+      .where('c.tenantId = :tenantId', { tenantId })
       .orderBy('c.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -98,6 +99,7 @@ export class ReportsService {
       .addSelect('s.status', 'status')
       .addSelect('COUNT(*)', 'count')
       .where('s.campaignId IN (:...campaignIds)', { campaignIds })
+      .andWhere('s.tenantId = :tenantId', { tenantId })
       .groupBy('s.campaignId')
       .addGroupBy('s.status');
 
@@ -156,19 +158,19 @@ export class ReportsService {
     };
   }
 
-  async buildCsvExport(query: ExportReportsQueryDto) {
+  async buildCsvExport(query: ExportReportsQueryDto, tenantId: string) {
     const timestamp = new Date().toISOString().replace(/[.:]/g, '-');
 
     if (query.kind === ReportsExportKind.CAMPAIGNS) {
       const campaigns = query.all
-        ? await this.getAllCampaignReports(query.window, query.channel)
+        ? await this.getAllCampaignReports(query.window, query.channel, tenantId)
         : (
             await this.getCampaignsOverview({
               page: query.page,
               limit: query.limit,
               window: query.window,
               channel: query.channel,
-            })
+            }, tenantId)
           ).items;
 
       const rows = [
@@ -204,14 +206,14 @@ export class ReportsService {
 
     if (query.kind === ReportsExportKind.AGENTS) {
       const agents = query.all
-        ? await this.getAllAgentReports(query.window, query.channel)
+        ? await this.getAllAgentReports(query.window, query.channel, tenantId)
         : (
             await this.getAgentsReport({
               page: query.page,
               limit: query.limit,
               window: query.window,
               channel: query.channel,
-            })
+            }, tenantId)
           ).items;
 
       const rows = [
@@ -249,7 +251,7 @@ export class ReportsService {
       const sessions = await this.getSessionsReport({
         window: query.window,
         channel: query.channel,
-      });
+      }, tenantId);
 
       const rows = [
         [
@@ -290,7 +292,7 @@ export class ReportsService {
 
     const detail = await this.getCampaignDetail(query.campaignId, {
       window: query.window,
-    });
+    }, tenantId);
 
     const rows = [
       [
@@ -325,20 +327,20 @@ export class ReportsService {
     };
   }
 
-  async buildJsonExport(query: ExportReportsQueryDto) {
+  async buildJsonExport(query: ExportReportsQueryDto, tenantId: string) {
     const timestamp = new Date().toISOString().replace(/[.:]/g, '-');
     const window = query.window ?? ReportsTimeWindow.ALL;
 
     if (query.kind === ReportsExportKind.CAMPAIGNS) {
       const items = query.all
-        ? await this.getAllCampaignReports(query.window, query.channel)
+        ? await this.getAllCampaignReports(query.window, query.channel, tenantId)
         : (
             await this.getCampaignsOverview({
               page: query.page,
               limit: query.limit,
               window: query.window,
               channel: query.channel,
-            })
+            }, tenantId)
           ).items;
 
       return {
@@ -359,14 +361,14 @@ export class ReportsService {
 
     if (query.kind === ReportsExportKind.AGENTS) {
       const items = query.all
-        ? await this.getAllAgentReports(query.window, query.channel)
+        ? await this.getAllAgentReports(query.window, query.channel, tenantId)
         : (
             await this.getAgentsReport({
               page: query.page,
               limit: query.limit,
               window: query.window,
               channel: query.channel,
-            })
+            }, tenantId)
           ).items;
 
       return {
@@ -390,7 +392,7 @@ export class ReportsService {
       const summary = await this.getSessionsReport({
         window: query.window,
         channel: query.channel,
-      });
+      }, tenantId);
       return {
         fileName: `sessions-summary-${timestamp}.json`,
         json: JSON.stringify(
@@ -416,7 +418,7 @@ export class ReportsService {
 
     const detail = await this.getCampaignDetail(query.campaignId, {
       window: query.window,
-    });
+    }, tenantId);
 
     return {
       fileName: `campaign-detail-${detail.campaignId}-${timestamp}.json`,
@@ -463,10 +465,11 @@ export class ReportsService {
   }
 
   async *iterateCampaignExportRows(
-    window?: ReportsTimeWindow,
-    channel?: CampaignChannel,
+    window: ReportsTimeWindow | undefined,
+    channel: CampaignChannel | undefined,
+    tenantId: string,
   ) {
-    const total = await this.getCampaignExportTotal(window, channel);
+    const total = await this.getCampaignExportTotal(window, channel, tenantId);
     if (total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -483,7 +486,7 @@ export class ReportsService {
         limit,
         window,
         channel,
-      });
+      }, tenantId);
       for (const campaign of batch.items) {
         yield [
           campaign.campaignId,
@@ -501,10 +504,11 @@ export class ReportsService {
   }
 
   async *iterateAgentExportRows(
-    window?: ReportsTimeWindow,
-    channel?: CampaignChannel,
+    window: ReportsTimeWindow | undefined,
+    channel: CampaignChannel | undefined,
+    tenantId: string,
   ) {
-    const total = await this.getAgentExportTotal(window, channel);
+    const total = await this.getAgentExportTotal(window, channel, tenantId);
     if (total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -521,7 +525,7 @@ export class ReportsService {
         limit,
         window,
         channel,
-      });
+      }, tenantId);
       for (const agent of batch.items) {
         yield [
           agent.agentId,
@@ -542,9 +546,9 @@ export class ReportsService {
     return `${cells.map((value) => this.escapeCsvCell(value)).join(',')}\n`;
   }
 
-  async getCampaignDetail(id: string, query: ListReportsQueryDto) {
+  async getCampaignDetail(id: string, query: ListReportsQueryDto, tenantId: string) {
     const windowStartAt = this.getWindowStartDate(query.window);
-    const campaign = await this.campaignsRepository.findOne({ where: { id } });
+    const campaign = await this.campaignsRepository.findOne({ where: { id, tenantId } });
     if (!campaign) {
       throw new NotFoundException('Campaign not found');
     }
@@ -558,6 +562,7 @@ export class ReportsService {
       .select('s.status', 'status')
       .addSelect('COUNT(*)', 'count')
       .where('s.campaignId = :campaignId', { campaignId: id })
+      .andWhere('s.tenantId = :tenantId', { tenantId })
       .groupBy('s.status');
 
     if (windowStartAt) {
@@ -593,6 +598,7 @@ export class ReportsService {
         'avgDuration',
       )
       .where('s.campaignId = :campaignId', { campaignId: id })
+      .andWhere('s.tenantId = :tenantId', { tenantId })
       .andWhere('s.startedAt IS NOT NULL')
       .andWhere('s.endedAt IS NOT NULL')
       .andWhere(windowStartAt ? 's.createdAt >= :windowStartAt' : '1=1', {
@@ -635,6 +641,7 @@ export class ReportsService {
         'first_agent.session_id = s.id AND first_agent.first_agent_at >= first_customer.first_customer_at',
       )
       .where('s.campaignId = :campaignId', { campaignId: id })
+      .andWhere('s.tenantId = :tenantId', { tenantId })
       .setParameters({
         ...firstCustomerSubQuery.getParameters(),
         ...firstAgentSubQuery.getParameters(),
@@ -660,13 +667,13 @@ export class ReportsService {
     };
   }
 
-  async getAgentsReport(query: ListReportsQueryDto) {
+  async getAgentsReport(query: ListReportsQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const windowStartAt = this.getWindowStartDate(query.window);
 
     const [agents, total] = await this.usersRepository.findAndCount({
-      where: { role: UserRole.AGENT },
+      where: { role: UserRole.AGENT, tenantId },
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -683,7 +690,8 @@ export class ReportsService {
     const sessionsQb = this.sessionsRepository
       .createQueryBuilder('s')
       .select(['s.agentId', 's.status', 's.startedAt', 's.endedAt'])
-      .where('s.agentId IN (:...agentIds)', { agentIds });
+      .where('s.agentId IN (:...agentIds)', { agentIds })
+      .andWhere('s.tenantId = :tenantId', { tenantId });
 
     if (query.channel) {
       sessionsQb.andWhere('s.channel = :channel', { channel: query.channel });
@@ -755,10 +763,12 @@ export class ReportsService {
     };
   }
 
-  async getSessionsReport(query: ListReportsQueryDto) {
+  async getSessionsReport(query: ListReportsQueryDto, tenantId: string) {
     const windowStartAt = this.getWindowStartDate(query.window);
 
-    const sessionsBaseQb = this.sessionsRepository.createQueryBuilder('s');
+    const sessionsBaseQb = this.sessionsRepository
+      .createQueryBuilder('s')
+      .where('s.tenantId = :tenantId', { tenantId });
     if (query.channel) {
       sessionsBaseQb.andWhere('s.channel = :channel', {
         channel: query.channel,
@@ -776,10 +786,11 @@ export class ReportsService {
       .createQueryBuilder('s')
       .select('s.status', 'status')
       .addSelect('COUNT(*)', 'count')
+      .where('s.tenantId = :tenantId', { tenantId })
       .groupBy('s.status');
 
     if (query.channel) {
-      statusQb.where('s.channel = :channel', { channel: query.channel });
+      statusQb.andWhere('s.channel = :channel', { channel: query.channel });
     }
 
     if (windowStartAt) {
@@ -814,7 +825,8 @@ export class ReportsService {
         'AVG(EXTRACT(EPOCH FROM (s.endedAt - s.startedAt)))',
         'avgDuration',
       )
-      .where('s.startedAt IS NOT NULL')
+      .where('s.tenantId = :tenantId', { tenantId })
+      .andWhere('s.startedAt IS NOT NULL')
       .andWhere('s.endedAt IS NOT NULL');
 
     if (query.channel) {
@@ -863,6 +875,7 @@ export class ReportsService {
         'first_agent',
         'first_agent.session_id = s.id AND first_agent.first_agent_at >= first_customer.first_customer_at',
       )
+      .where('s.tenantId = :tenantId', { tenantId })
       .setParameters({
         ...firstCustomerSubQuery.getParameters(),
         ...firstAgentSubQuery.getParameters(),
@@ -925,41 +938,44 @@ export class ReportsService {
   }
 
   private async getCampaignExportTotal(
-    window?: ReportsTimeWindow,
-    channel?: CampaignChannel,
+    window: ReportsTimeWindow | undefined,
+    channel: CampaignChannel | undefined,
+    tenantId: string,
   ) {
     const result = await this.getCampaignsOverview({
       page: 1,
       limit: 1,
       window,
       channel,
-    });
+    }, tenantId);
     return result.meta.total;
   }
 
   private async getAgentExportTotal(
-    window?: ReportsTimeWindow,
-    channel?: CampaignChannel,
+    window: ReportsTimeWindow | undefined,
+    channel: CampaignChannel | undefined,
+    tenantId: string,
   ) {
     const result = await this.getAgentsReport({
       page: 1,
       limit: 1,
       window,
       channel,
-    });
+    }, tenantId);
     return result.meta.total;
   }
 
   private async getAllCampaignReports(
-    window?: ReportsTimeWindow,
-    channel?: CampaignChannel,
+    window: ReportsTimeWindow | undefined,
+    channel: CampaignChannel | undefined,
+    tenantId: string,
   ) {
     const firstPage = await this.getCampaignsOverview({
       page: 1,
       limit: 1,
       window,
       channel,
-    });
+    }, tenantId);
     if (firstPage.meta.total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -979,7 +995,7 @@ export class ReportsService {
         limit,
         window,
         channel,
-      });
+      }, tenantId);
       total = batch.meta.total;
       items.push(...batch.items);
       page += 1;
@@ -989,15 +1005,16 @@ export class ReportsService {
   }
 
   private async getAllAgentReports(
-    window?: ReportsTimeWindow,
-    channel?: CampaignChannel,
+    window: ReportsTimeWindow | undefined,
+    channel: CampaignChannel | undefined,
+    tenantId: string,
   ) {
     const firstPage = await this.getAgentsReport({
       page: 1,
       limit: 1,
       window,
       channel,
-    });
+    }, tenantId);
     if (firstPage.meta.total > MAX_EXPORT_ROWS) {
       throw new BadRequestException(
         `Export rows exceeded limit (${MAX_EXPORT_ROWS}). Narrow the window or use paginated export.`,
@@ -1017,7 +1034,7 @@ export class ReportsService {
         limit,
         window,
         channel,
-      });
+      }, tenantId);
       total = batch.meta.total;
       items.push(...batch.items);
       page += 1;

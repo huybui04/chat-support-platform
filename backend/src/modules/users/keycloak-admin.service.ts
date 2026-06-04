@@ -15,19 +15,23 @@ type KeycloakUser = {
 
 @Injectable()
 export class KeycloakAdminService {
-  async createUser(input: {
-    username: string;
-    email: string;
-    fullName: string;
-    role: UserRole;
-    password: string;
-    requirePasswordChange: boolean;
-    firstName?: string;
-    lastName?: string;
-  }): Promise<string> {
-    const token = await this.getAdminAccessToken();
+  async createUser(
+    input: {
+      username: string;
+      email: string;
+      fullName: string;
+      role: UserRole;
+      password: string;
+      requirePasswordChange: boolean;
+      firstName?: string;
+      lastName?: string;
+    },
+    customRealm?: string,
+  ): Promise<string> {
+    const token = await this.getAdminAccessToken(customRealm);
     const { baseUrl, realm } = this.getIssuerConfig();
-    const adminRealm = this.getAdminRealm(realm);
+    const targetRealm = customRealm || realm;
+    const adminRealm = this.getAdminRealm(targetRealm);
     const adminBaseUrl = `${baseUrl}/admin/realms/${adminRealm}`;
 
     const response = await fetch(`${adminBaseUrl}/users`, {
@@ -76,10 +80,11 @@ export class KeycloakAdminService {
     return userId;
   }
 
-  async deleteUser(userId: string): Promise<void> {
-    const token = await this.getAdminAccessToken();
+  async deleteUser(userId: string, customRealm?: string): Promise<void> {
+    const token = await this.getAdminAccessToken(customRealm);
     const { baseUrl, realm } = this.getIssuerConfig();
-    const adminRealm = this.getAdminRealm(realm);
+    const targetRealm = customRealm || realm;
+    const adminRealm = this.getAdminRealm(targetRealm);
     const adminBaseUrl = `${baseUrl}/admin/realms/${adminRealm}`;
 
     await fetch(`${adminBaseUrl}/users/${userId}`, {
@@ -147,9 +152,10 @@ export class KeycloakAdminService {
     return users[0]?.id;
   }
 
-  private async getAdminAccessToken(): Promise<string> {
+  private async getAdminAccessToken(customRealm?: string): Promise<string> {
     const { baseUrl, realm } = this.getIssuerConfig();
-    const adminRealm = this.getAdminRealm(realm);
+    const targetRealm = customRealm || realm;
+    const adminRealm = this.getAdminRealm(targetRealm);
     const clientId = process.env.KEYCLOAK_ADMIN_CLIENT_ID?.trim();
 
     if (!clientId) {

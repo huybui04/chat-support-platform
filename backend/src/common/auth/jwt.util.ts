@@ -110,6 +110,14 @@ function buildAuthUserFromPayload(payload: JwtPayload): AuthUser | null {
     return null;
   }
 
+  let tenantId = 'chat-support-platform';
+  if (payload.iss) {
+    const match = payload.iss.match(/\/realms\/([^/]+)$/);
+    if (match) {
+      tenantId = match[1];
+    }
+  }
+
   const rawRoles = extractRawRoles(payload);
   return {
     sub: payload.sub,
@@ -119,6 +127,7 @@ function buildAuthUserFromPayload(payload: JwtPayload): AuthUser | null {
     roles: mapRoles(rawRoles),
     rawRoles,
     tokenExpiresAt: typeof payload.exp === 'number' ? payload.exp : undefined,
+    tenantId,
   };
 }
 

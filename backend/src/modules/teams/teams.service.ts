@@ -17,12 +17,13 @@ export class TeamsService {
     private readonly teamMembersRepository: Repository<TeamMember>,
   ) {}
 
-  async findAll(query: ListTeamsQueryDto) {
+  async findAll(query: ListTeamsQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
     const qb = this.teamsRepository
       .createQueryBuilder('team')
+      .where('team.tenantId = :tenantId', { tenantId })
       .orderBy('team.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -41,8 +42,8 @@ export class TeamsService {
     };
   }
 
-  async findById(id: string): Promise<Team> {
-    const team = await this.teamsRepository.findOne({ where: { id } });
+  async findById(id: string, tenantId: string): Promise<Team> {
+    const team = await this.teamsRepository.findOne({ where: { id, tenantId } });
     if (!team) {
       throw new NotFoundException('Team not found');
     }
@@ -50,18 +51,19 @@ export class TeamsService {
     return team;
   }
 
-  async create(payload: CreateTeamDto): Promise<Team> {
+  async create(payload: CreateTeamDto, tenantId: string): Promise<Team> {
     const team = this.teamsRepository.create({
       name: payload.name,
       description: payload.description ?? null,
       createdById: payload.createdById,
+      tenantId,
     });
 
     return this.teamsRepository.save(team);
   }
 
-  async update(id: string, payload: UpdateTeamDto): Promise<Team> {
-    const team = await this.findById(id);
+  async update(id: string, payload: UpdateTeamDto, tenantId: string): Promise<Team> {
+    const team = await this.findById(id, tenantId);
 
     const merged = this.teamsRepository.merge(team, {
       ...payload,
@@ -74,16 +76,17 @@ export class TeamsService {
     return this.teamsRepository.save(merged);
   }
 
-  async remove(id: string): Promise<void> {
-    const team = await this.findById(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    const team = await this.findById(id, tenantId);
     await this.teamsRepository.remove(team);
   }
 
   async addMember(
     teamId: string,
     payload: AddTeamMemberDto,
+    tenantId: string,
   ): Promise<TeamMember> {
-    await this.findById(teamId);
+    await this.findById(teamId, tenantId);
 
     const existing = await this.teamMembersRepository.findOne({
       where: { teamId, userId: payload.userId },
@@ -101,8 +104,8 @@ export class TeamsService {
     return this.teamMembersRepository.save(member);
   }
 
-  async listMembers(teamId: string): Promise<TeamMember[]> {
-    await this.findById(teamId);
+  async listMembers(teamId: string, tenantId: string): Promise<TeamMember[]> {
+    await this.findById(teamId, tenantId);
 
     return this.teamMembersRepository.find({
       where: { teamId },
@@ -145,7 +148,9 @@ export class TeamsService {
     return Array.from(deduped.values());
   }
 
-  async removeMember(teamId: string, userId: string): Promise<void> {
+  async removeMember(teamId: string, userId: string, tenantId: string): Promise<void> {
+    await this.findById(teamId, tenantId);
+
     const member = await this.teamMembersRepository.findOne({
       where: { teamId, userId },
     });

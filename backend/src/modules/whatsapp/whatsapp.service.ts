@@ -166,7 +166,7 @@ export class WhatsappService {
     const processed: ProcessedInboundMessage[] = [];
 
     for (const inbound of inboundMessages) {
-      const contact = await this.resolveContact(inbound, channel);
+      const contact = await this.resolveContact(inbound, channel, campaign.tenantId || 'chat-support-platform');
       await this.ensureCampaignContactLink(campaign.id, contact.id);
 
       let session = await this.findOpenSession(
@@ -275,11 +275,12 @@ export class WhatsappService {
   private async resolveContact(
     payload: NormalizedInboundMessage,
     channel: ExternalChannel,
+    tenantId: string,
   ) {
     const externalContactId = this.toContactExternalId(channel, payload.from);
 
     const existingContact = await this.contactsRepository.findOne({
-      where: { whatsappId: externalContactId },
+      where: { whatsappId: externalContactId, tenantId },
     });
 
     if (existingContact) {
@@ -292,6 +293,7 @@ export class WhatsappService {
         whatsappId: externalContactId,
         phone: null,
         email: null,
+        tenantId,
         metadata: {
           source: `${channel}-webhook`,
           externalContactId: payload.from,

@@ -26,11 +26,11 @@ export class UsersService {
     private readonly keycloakAdminService: KeycloakAdminService,
   ) {}
 
-  async findAll(query: ListUsersQueryDto) {
+  async findAll(query: ListUsersQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    const where: FindOptionsWhere<User> = {};
+    const where: FindOptionsWhere<User> = { tenantId };
     if (query.role) {
       where.role = query.role;
     }
@@ -57,6 +57,15 @@ export class UsersService {
     return user;
   }
 
+  async findByIdAndTenant(id: string, tenantId: string): Promise<User> {
+    const user = await this.usersRepository.findOne({ where: { id, tenantId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
   async findByKeycloakId(keycloakId: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { keycloakId } });
     if (!user) {
@@ -70,6 +79,7 @@ export class UsersService {
     const nextRole = this.resolveRoleFromAuthUser(authUser);
     const nextEmail = authUser.email?.trim().toLowerCase();
     const nextFullName = authUser.fullName?.trim() || nextEmail;
+    const nextTenantId = authUser.tenantId || 'chat-support-platform';
 
     if (!nextEmail || !nextFullName) {
       throw new BadRequestException('Authenticated user is missing email.');
@@ -83,7 +93,8 @@ export class UsersService {
       const hasChanges =
         existingByKeycloakId.email !== nextEmail ||
         existingByKeycloakId.fullName !== nextFullName ||
-        existingByKeycloakId.role !== nextRole;
+        existingByKeycloakId.role !== nextRole ||
+        existingByKeycloakId.tenantId !== nextTenantId;
 
       if (!hasChanges) {
         return existingByKeycloakId;
@@ -93,6 +104,7 @@ export class UsersService {
         email: nextEmail,
         fullName: nextFullName,
         role: nextRole,
+        tenantId: nextTenantId,
       });
 
       return this.usersRepository.save(updated);
@@ -107,6 +119,7 @@ export class UsersService {
         keycloakId: authUser.sub,
         fullName: nextFullName,
         role: nextRole,
+        tenantId: nextTenantId,
       });
 
       return this.usersRepository.save(updated);
@@ -119,12 +132,13 @@ export class UsersService {
       role: nextRole,
       isActive: true,
       isOnline: false,
+      tenantId: nextTenantId,
     });
 
     return this.usersRepository.save(created);
   }
 
-  async create(payload: CreateUserDto): Promise<User> {
+  async create(payload: CreateUserDto, tenantId: string): Promise<User> {
     const keycloakId = await this.keycloakAdminService.createUser({
       username: payload.username,
       email: payload.email,
@@ -134,7 +148,7 @@ export class UsersService {
       requirePasswordChange: payload.requirePasswordChange ?? false,
       firstName: payload.firstName,
       lastName: payload.lastName,
-    });
+    }, tenantId);
 
     const user = this.usersRepository.create({
       keycloakId,
@@ -143,25 +157,26 @@ export class UsersService {
       role: payload.role,
       isActive: payload.isActive ?? true,
       isOnline: payload.isOnline ?? false,
+      tenantId,
     });
 
     try {
       return await this.usersRepository.save(user);
     } catch (error) {
-      await this.keycloakAdminService.deleteUser(keycloakId);
+      await this.keycloakAdminService.deleteUser(keycloakId, tenantId);
       throw error;
     }
   }
 
-  async update(id: string, payload: UpdateUserDto): Promise<User> {
-    const user = await this.findById(id);
+  async update(id: string, payload: UpdateUserDto, tenantId: string): Promise<User> {
+    const user = await this.findByIdAndTenant(id, tenantId);
     const merged = this.usersRepository.merge(user, payload);
 
     return this.usersRepository.save(merged);
   }
 
-  async deactivate(id: string): Promise<User> {
-    const user = await this.findById(id);
+  async deactivate(id: string, tenantId: string): Promise<User> {
+    const user = await this.findByIdAndTenant(id, tenantId);
     user.isActive = false;
 
     return this.usersRepository.save(user);
@@ -188,7 +203,7 @@ export class UsersService {
     this.chatGateway.emitAgentStatusChanged({
       agentId: updatedUser.id,
       isOnline: updatedUser.isOnline,
-    });
+    }, updatedUser.tenantId || 'chat-support-platform');
 
     return updatedUser;
   }

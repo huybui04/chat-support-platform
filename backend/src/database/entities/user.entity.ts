@@ -43,6 +43,10 @@ export class User {
   @Column({ name: 'is_online', type: 'boolean', default: false })
   isOnline: boolean;
 
+  @Column({ name: 'tenant_id', type: 'varchar', length: 255, default: 'chat-support-platform' })
+  tenantId: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

@@ -14,11 +14,12 @@ export class ContactsService {
     private readonly contactsRepository: Repository<Contact>,
   ) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: PaginationQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
     const [items, total] = await this.contactsRepository.findAndCount({
+      where: { tenantId },
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -30,8 +31,8 @@ export class ContactsService {
     };
   }
 
-  async findById(id: string): Promise<Contact> {
-    const contact = await this.contactsRepository.findOne({ where: { id } });
+  async findById(id: string, tenantId: string): Promise<Contact> {
+    const contact = await this.contactsRepository.findOne({ where: { id, tenantId } });
     if (!contact) {
       throw new NotFoundException('Contact not found');
     }
@@ -39,20 +40,21 @@ export class ContactsService {
     return contact;
   }
 
-  async create(payload: CreateContactDto): Promise<Contact> {
+  async create(payload: CreateContactDto, tenantId: string): Promise<Contact> {
     const contact = this.contactsRepository.create({
       fullName: payload.fullName,
       phone: payload.phone ?? null,
       email: payload.email ?? null,
       whatsappId: payload.whatsappId ?? null,
       metadata: payload.metadata ?? null,
+      tenantId,
     });
 
     return this.contactsRepository.save(contact);
   }
 
-  async update(id: string, payload: UpdateContactDto): Promise<Contact> {
-    const contact = await this.findById(id);
+  async update(id: string, payload: UpdateContactDto, tenantId: string): Promise<Contact> {
+    const contact = await this.findById(id, tenantId);
 
     const merged = this.contactsRepository.merge(contact, {
       ...payload,
@@ -69,8 +71,8 @@ export class ContactsService {
     return this.contactsRepository.save(merged);
   }
 
-  async remove(id: string): Promise<void> {
-    const contact = await this.findById(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    const contact = await this.findById(id, tenantId);
     await this.contactsRepository.remove(contact);
   }
 }

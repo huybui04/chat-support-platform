@@ -67,6 +67,10 @@ export class SessionsService {
       .skip((page - 1) * limit)
       .take(limit);
 
+    if (currentUser) {
+      qb.andWhere('session.tenantId = :tenantId', { tenantId: currentUser.tenantId || 'chat-support-platform' });
+    }
+
     if (query.status) {
       qb.andWhere('session.status = :status', { status: query.status });
     }
@@ -96,7 +100,7 @@ export class SessionsService {
 
     if (isAgentOnlyRequest) {
       const currentAgent = await this.usersRepository.findOne({
-        where: { keycloakId: currentUser.sub },
+        where: { keycloakId: currentUser.sub, tenantId: currentUser.tenantId || 'chat-support-platform' },
         select: { id: true },
       });
 
@@ -148,9 +152,9 @@ export class SessionsService {
     };
   }
 
-  async findById(id: string): Promise<ChatSession> {
+  async findById(id: string, tenantId: string): Promise<ChatSession> {
     const session = await this.sessionsRepository.findOne({
-      where: { id },
+      where: { id, tenantId },
       relations: ['campaign', 'contact', 'agent'],
     });
     if (!session) {
@@ -161,6 +165,11 @@ export class SessionsService {
   }
 
   async create(payload: CreateSessionDto): Promise<ChatSession> {
+    const campaign = await this.campaignsRepository.findOne({
+      where: { id: payload.campaignId },
+    });
+    const tenantId = campaign?.tenantId || 'chat-support-platform';
+
     const session = this.sessionsRepository.create({
       campaignId: payload.campaignId,
       contactId: payload.contactId,
@@ -170,6 +179,7 @@ export class SessionsService {
         ? ChatSessionStatus.ACTIVE
         : ChatSessionStatus.PENDING,
       startedAt: payload.agentId ? new Date() : null,
+      tenantId,
     });
 
     const createdSession = await this.sessionsRepository.save(session);
@@ -182,7 +192,7 @@ export class SessionsService {
         id: createdSession.id,
         status: createdSession.status,
         campaignName,
-      });
+      }, tenantId);
     }
 
     if (createdSession.status === ChatSessionStatus.ACTIVE) {
@@ -192,7 +202,7 @@ export class SessionsService {
         agentId: createdSession.agentId,
         agentName,
         campaignName,
-      });
+      }, tenantId);
     }
 
     return createdSession;
@@ -203,12 +213,13 @@ export class SessionsService {
     payload: AcceptSessionDto,
     currentUser: AuthUser,
   ): Promise<ChatSession> {
-    const session = await this.findById(id);
+    const tenantId = currentUser.tenantId || 'chat-support-platform';
+    const session = await this.findById(id, tenantId);
 
     let resolvedAgentId = payload.agentId;
     if (!resolvedAgentId) {
       const user = await this.usersRepository.findOne({
-        where: { keycloakId: currentUser.sub },
+        where: { keycloakId: currentUser.sub, tenantId },
       });
 
       if (!user) {
@@ -243,13 +254,13 @@ export class SessionsService {
       agentId: updatedSession.agentId,
       agentName,
       campaignName,
-    });
+    }, tenantId);
 
     return updatedSession;
   }
 
-  async end(id: string): Promise<ChatSession> {
-    const session = await this.findById(id);
+  async end(id: string, tenantId: string): Promise<ChatSession> {
+    const session = await this.findById(id, tenantId);
     session.status = ChatSessionStatus.COMPLETED;
     session.endedAt = new Date();
 
@@ -271,11 +282,12 @@ export class SessionsService {
   async listMessages(
     sessionId: string,
     query: ListSessionMessagesQueryDto,
+    tenantId: string,
   ): Promise<{
     items: ChatMessage[];
     meta: { limit: number; hasMore: boolean; beforeMessageId?: string };
   }> {
-    await this.findById(sessionId);
+    await this.findById(sessionId, tenantId);
 
     const limit = query.limit ?? 20;
     let cursorCreatedAt: Date | null = null;

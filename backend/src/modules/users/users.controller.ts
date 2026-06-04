@@ -33,33 +33,43 @@ export class UsersController {
   }
 
   @Get()
-  async findAll(@Query() query: ListUsersQueryDto) {
-    const result = await this.usersService.findAll(query);
+  async findAll(
+    @Query() query: ListUsersQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const result = await this.usersService.findAll(query, user.tenantId || 'chat-support-platform');
     return apiSuccess(result.items, result.meta);
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string) {
-    const user = await this.usersService.findById(id);
-    return apiSuccess(user);
+  async findById(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const dbUser = await this.usersService.findByIdAndTenant(id, user.tenantId || 'chat-support-platform');
+    return apiSuccess(dbUser);
   }
 
   @Post()
-  async create(@Body() payload: CreateUserDto) {
-    const user = await this.usersService.create(payload);
-    return apiSuccess(user);
+  async create(
+    @Body() payload: CreateUserDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const dbUser = await this.usersService.create(payload, user.tenantId || 'chat-support-platform');
+    return apiSuccess(dbUser);
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() payload: UpdateUserDto) {
-    const user = await this.usersService.update(id, payload);
-    return apiSuccess(user);
+  async update(
+    @Param('id') id: string,
+    @Body() payload: UpdateUserDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const dbUser = await this.usersService.update(id, payload, user.tenantId || 'chat-support-platform');
+    return apiSuccess(dbUser);
   }
 
   @Delete(':id')
-  async deactivate(@Param('id') id: string) {
-    const user = await this.usersService.deactivate(id);
-    return apiSuccess(user);
+  async deactivate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const dbUser = await this.usersService.deactivate(id, user.tenantId || 'chat-support-platform');
+    return apiSuccess(dbUser);
   }
 
   @Patch(':id/status')

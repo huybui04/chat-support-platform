@@ -46,6 +46,10 @@ export class ChatSession {
   @Column({ name: 'agent_id', type: 'uuid', nullable: true })
   agentId: string | null;
 
+  @Column({ name: 'tenant_id', type: 'varchar', length: 255, default: 'chat-support-platform' })
+  tenantId: string;
+
+
   @Column({ type: 'enum', enum: SessionChannel })
   channel: SessionChannel;
 

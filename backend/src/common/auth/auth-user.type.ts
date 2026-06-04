@@ -8,4 +8,6 @@ export interface AuthUser {
   roles: UserRole[];
   rawRoles: string[];
   tokenExpiresAt?: number;
+  tenantId?: string;
 }
+

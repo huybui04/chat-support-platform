@@ -109,7 +109,7 @@ export class GmailService {
     private readonly aiService: AiService,
   ) {}
 
-  buildOAuthAuthorizeUrl(returnUrl?: string) {
+  buildOAuthAuthorizeUrl(tenantId: string, returnUrl?: string) {
     const clientId = process.env.GMAIL_CLIENT_ID?.trim();
     const redirectUri = process.env.GMAIL_REDIRECT_URI?.trim();
 
@@ -120,7 +120,7 @@ export class GmailService {
     }
 
     const scopes = this.resolveScopes();
-    const state = returnUrl ? encodeState({ returnUrl }) : undefined;
+    const state = encodeState({ returnUrl, tenantId });
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -161,13 +161,16 @@ export class GmailService {
       throw new BadGatewayException('Failed to resolve Gmail profile');
     }
 
+    const decodedState = decodeState(state);
+    const tenantId = decodedState?.tenantId || 'chat-support-platform';
+
     const account = await this.upsertAccount(
       profile.emailAddress,
       tokenResponse,
+      tenantId,
     );
     await this.ensureWatch(account);
 
-    const decodedState = decodeState(state);
     const redirectUrl =
       decodedState?.returnUrl?.trim() ||
       process.env.GMAIL_SUCCESS_REDIRECT_URL?.trim() ||
@@ -176,8 +179,9 @@ export class GmailService {
     return redirectUrl;
   }
 
-  async listAccounts() {
+  async listAccounts(tenantId: string) {
     const accounts = await this.gmailAccountsRepository.find({
+      where: { tenantId },
       order: { createdAt: 'DESC' },
     });
 
@@ -262,7 +266,7 @@ export class GmailService {
     }
 
     const account = await this.gmailAccountsRepository.findOne({
-      where: { email: gmailAccountEmail },
+      where: { email: gmailAccountEmail, tenantId: campaign.tenantId },
     });
 
     if (!account) {
@@ -394,7 +398,7 @@ export class GmailService {
     return (await response.json()) as GmailProfile;
   }
 
-  private async upsertAccount(email: string, tokens: GmailTokenResponse) {
+  private async upsertAccount(email: string, tokens: GmailTokenResponse, tenantId: string) {
     const existing = await this.gmailAccountsRepository.findOne({
       where: { email },
     });
@@ -406,6 +410,7 @@ export class GmailService {
     if (existing) {
       existing.accessToken = tokens.access_token;
       existing.accessTokenExpiresAt = expiresAt;
+      existing.tenantId = tenantId;
       if (tokens.refresh_token) {
         existing.refreshToken = tokens.refresh_token;
       }
@@ -424,6 +429,7 @@ export class GmailService {
         refreshToken: tokens.refresh_token,
         accessToken: tokens.access_token,
         accessTokenExpiresAt: expiresAt,
+        tenantId,
       }),
     );
   }
@@ -640,7 +646,7 @@ export class GmailService {
       throw new ForbiddenException('Campaign not eligible for inbound Gmail');
     }
 
-    const contact = await this.resolveContact(fromInfo);
+    const contact = await this.resolveContact(fromInfo, campaign.tenantId || 'chat-support-platform');
     await this.ensureCampaignContactLink(campaign.id, contact.id);
 
     let session = await this.findOpenSession(
@@ -778,10 +784,10 @@ export class GmailService {
     return null;
   }
 
-  private async resolveContact(info: { email: string; name?: string | null }) {
+  private async resolveContact(info: { email: string; name?: string | null }, tenantId: string) {
     const email = info.email.trim().toLowerCase();
     const existingContact = await this.contactsRepository.findOne({
-      where: { email },
+      where: { email, tenantId },
     });
 
     if (existingContact) {
@@ -794,6 +800,7 @@ export class GmailService {
         email,
         phone: null,
         whatsappId: null,
+        tenantId,
         metadata: {
           source: 'gmail',
           email,
@@ -1039,7 +1046,7 @@ function decodeState(state?: string) {
       .replace(/_/g, '/')
       .padEnd(Math.ceil(state.length / 4) * 4, '=');
     const json = Buffer.from(padded, 'base64').toString('utf8');
-    return JSON.parse(json) as { returnUrl?: string };
+    return JSON.parse(json) as { returnUrl?: string; tenantId?: string };
   } catch {
     return null;
   }

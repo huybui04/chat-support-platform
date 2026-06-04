@@ -20,7 +20,7 @@ export class ChannelMappingsService {
     private readonly campaignsRepository: Repository<Campaign>,
   ) {}
 
-  async findAll(query: ListChannelMappingsQueryDto) {
+  async findAll(query: ListChannelMappingsQueryDto, tenantId: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const sortBy = query.sortBy ?? ChannelMappingsSortBy.CREATED_AT;
@@ -37,6 +37,8 @@ export class ChannelMappingsService {
 
     const qb = this.mappingsRepository
       .createQueryBuilder('mapping')
+      .innerJoin('mapping.campaign', 'campaign')
+      .where('campaign.tenantId = :tenantId', { tenantId })
       .orderBy(sortColumn, sortOrder)
       .skip((page - 1) * limit)
       .take(limit);
@@ -69,10 +71,13 @@ export class ChannelMappingsService {
     };
   }
 
-  async findById(id: string): Promise<ChannelCampaignMapping> {
-    const mapping = await this.mappingsRepository.findOne({ where: { id } });
+  async findById(id: string, tenantId: string): Promise<ChannelCampaignMapping> {
+    const mapping = await this.mappingsRepository.findOne({
+      where: { id },
+      relations: ['campaign'],
+    });
 
-    if (!mapping) {
+    if (!mapping || mapping.campaign?.tenantId !== tenantId) {
       throw new NotFoundException('Channel mapping not found');
     }
 
@@ -81,8 +86,9 @@ export class ChannelMappingsService {
 
   async create(
     payload: CreateChannelMappingDto,
+    tenantId: string,
   ): Promise<ChannelCampaignMapping> {
-    await this.ensureCampaignExists(payload.campaignId);
+    await this.ensureCampaignExists(payload.campaignId, tenantId);
 
     const mapping = this.mappingsRepository.create({
       channel: payload.channel,
@@ -98,11 +104,12 @@ export class ChannelMappingsService {
   async update(
     id: string,
     payload: UpdateChannelMappingDto,
+    tenantId: string,
   ): Promise<ChannelCampaignMapping> {
-    const mapping = await this.findById(id);
+    const mapping = await this.findById(id, tenantId);
 
     if (payload.campaignId) {
-      await this.ensureCampaignExists(payload.campaignId);
+      await this.ensureCampaignExists(payload.campaignId, tenantId);
     }
 
     const merged = this.mappingsRepository.merge(mapping, {
@@ -117,17 +124,14 @@ export class ChannelMappingsService {
     return this.mappingsRepository.save(merged);
   }
 
-  async remove(id: string): Promise<void> {
-    const result = await this.mappingsRepository.delete({ id });
-
-    if (!result.affected) {
-      throw new NotFoundException('Channel mapping not found');
-    }
+  async remove(id: string, tenantId: string): Promise<void> {
+    const mapping = await this.findById(id, tenantId);
+    await this.mappingsRepository.remove(mapping);
   }
 
-  private async ensureCampaignExists(campaignId: string): Promise<void> {
+  private async ensureCampaignExists(campaignId: string, tenantId: string): Promise<void> {
     const campaign = await this.campaignsRepository.findOne({
-      where: { id: campaignId },
+      where: { id: campaignId, tenantId },
       select: { id: true },
     });
 

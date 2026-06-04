@@ -199,7 +199,7 @@ export function AdminAgentsPage() {
           username: createAgentForm.username.trim(),
           fullName,
           email: createAgentForm.email.trim(),
-          role: createAgentForm.role,
+          role: createAgentForm.role === "" ? undefined : createAgentForm.role,
           password: passwordValue,
           firstName: createAgentForm.firstName.trim(),
           lastName: createAgentForm.lastName.trim(),

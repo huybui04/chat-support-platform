@@ -77,6 +77,10 @@ export class Campaign {
   @Column({ name: 'created_by', type: 'uuid' })
   createdById: string;
 
+  @Column({ name: 'tenant_id', type: 'varchar', length: 255, default: 'chat-support-platform' })
+  tenantId: string;
+
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

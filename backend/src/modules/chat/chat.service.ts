@@ -40,9 +40,13 @@ export class ChatService {
     private readonly gmailService: GmailService,
   ) {}
 
-  async ensureSessionExists(sessionId: string): Promise<ChatSession> {
+  async ensureSessionExists(sessionId: string, tenantId?: string): Promise<ChatSession> {
+    const query: any = { id: sessionId };
+    if (tenantId) {
+      query.tenantId = tenantId;
+    }
     const session = await this.sessionsRepository.findOne({
-      where: { id: sessionId },
+      where: query,
     });
     if (!session) {
       throw new NotFoundException('Session not found');
@@ -51,8 +55,8 @@ export class ChatService {
     return session;
   }
 
-  async saveIncomingMessage(payload: SendMessageDto): Promise<ChatMessage> {
-    const session = await this.ensureSessionExists(payload.sessionId);
+  async saveIncomingMessage(payload: SendMessageDto, tenantId?: string): Promise<ChatMessage> {
+    const session = await this.ensureSessionExists(payload.sessionId, tenantId);
 
     if (session.channel === SessionChannel.WHATSAPP) {
       this.logger.debug(
@@ -493,8 +497,8 @@ export class ChatService {
     return normalized;
   }
 
-  async endSession(sessionId: string): Promise<ChatSession> {
-    const session = await this.ensureSessionExists(sessionId);
+  async endSession(sessionId: string, tenantId?: string): Promise<ChatSession> {
+    const session = await this.ensureSessionExists(sessionId, tenantId);
     session.status = ChatSessionStatus.COMPLETED;
     session.endedAt = new Date();
 

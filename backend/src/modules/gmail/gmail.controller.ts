@@ -9,6 +9,8 @@ import {
   Redirect,
 } from '@nestjs/common';
 
+import type { AuthUser } from '../../common/auth/auth-user.type';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { apiSuccess } from '../../common/utils/api-response.util';
@@ -22,8 +24,11 @@ export class GmailController {
   @Get('oauth/authorize')
   @Public()
   @Redirect()
-  authorize(@Query('returnUrl') returnUrl?: string) {
-    const url = this.gmailService.buildOAuthAuthorizeUrl(returnUrl);
+  authorize(
+    @Query('tenantId') tenantId?: string,
+    @Query('returnUrl') returnUrl?: string,
+  ) {
+    const url = this.gmailService.buildOAuthAuthorizeUrl(tenantId || 'chat-support-platform', returnUrl);
     return { url };
   }
 
@@ -44,8 +49,8 @@ export class GmailController {
 
   @Get('accounts')
   @Roles(UserRole.SUPERVISOR)
-  async listAccounts() {
-    const accounts = await this.gmailService.listAccounts();
+  async listAccounts(@CurrentUser() user: AuthUser) {
+    const accounts = await this.gmailService.listAccounts(user.tenantId || 'chat-support-platform');
     return apiSuccess(accounts);
   }
 
@@ -57,3 +62,4 @@ export class GmailController {
     return apiSuccess(result);
   }
 }
+

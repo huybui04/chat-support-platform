@@ -34,6 +34,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly socketToAgentId = new Map<string, string>();
   private readonly agentOnlineSocketCount = new Map<string, number>();
+  private readonly tenantToOnlineAgentIds = new Map<string, Set<string>>();
 
   constructor(private readonly chatService: ChatService) {}
 
@@ -76,15 +77,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    const tenantId = user.tenantId || 'chat-support-platform';
+    (client as any).tenantId = tenantId;
+    (client as any).userId = user.sub;
+    await client.join(`tenant:${tenantId}`);
+
     if (user.roles.includes(UserRole.AGENT)) {
-      this.markAgentConnected(user.sub, client.id);
+      this.markAgentConnected(user.sub, client.id, tenantId);
     }
 
     client.emit('connected', { socketId: client.id });
   }
 
   handleDisconnect(client: Socket) {
-    this.markAgentDisconnected(client.id);
+    this.markAgentDisconnected(client.id, (client as any).tenantId || 'chat-support-platform');
   }
 
   emitSessionAssigned(session: {
@@ -92,56 +98,64 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     agentId: string | null;
     agentName?: string | null;
     campaignName?: string | null;
-  }) {
+  }, tenantId: string) {
     if (!this.server) {
       return;
     }
-    this.server.emit('session_assigned', { session });
+    this.server.to(`tenant:${tenantId}`).emit('session_assigned', { session });
   }
 
   emitNewSessionPending(session: {
     id: string;
     status: string;
     campaignName?: string | null;
-  }) {
+  }, tenantId: string) {
     if (!this.server) {
       return;
     }
-    this.server.emit('new_session_pending', { session });
+    this.server.to(`tenant:${tenantId}`).emit('new_session_pending', { session });
   }
 
-  emitAgentStatusChanged(payload: { agentId: string; isOnline: boolean }) {
+  emitAgentStatusChanged(payload: { agentId: string; isOnline: boolean }, tenantId: string) {
     if (!this.server) {
       return;
     }
-    this.server.emit('agent_status_changed', payload);
+    this.server.to(`tenant:${tenantId}`).emit('agent_status_changed', payload);
   }
 
-  private emitAgentsOnlineSnapshot() {
+  private emitAgentsOnlineSnapshot(tenantId: string) {
     if (!this.server) {
       return;
     }
 
-    this.server.emit('agents_online_snapshot', {
-      agentIds: [...this.agentOnlineSocketCount.keys()],
+    const tenantAgents = this.tenantToOnlineAgentIds.get(tenantId);
+    this.server.to(`tenant:${tenantId}`).emit('agents_online_snapshot', {
+      agentIds: tenantAgents ? [...tenantAgents] : [],
     });
   }
 
-  private markAgentConnected(agentId: string, socketId: string) {
+  private markAgentConnected(agentId: string, socketId: string, tenantId: string) {
     this.socketToAgentId.set(socketId, agentId);
 
     const current = this.agentOnlineSocketCount.get(agentId) ?? 0;
     const next = current + 1;
     this.agentOnlineSocketCount.set(agentId, next);
 
+    let tenantAgents = this.tenantToOnlineAgentIds.get(tenantId);
+    if (!tenantAgents) {
+      tenantAgents = new Set<string>();
+      this.tenantToOnlineAgentIds.set(tenantId, tenantAgents);
+    }
+    tenantAgents.add(agentId);
+
     if (next === 1) {
-      this.emitAgentStatusChanged({ agentId, isOnline: true });
+      this.emitAgentStatusChanged({ agentId, isOnline: true }, tenantId);
     }
 
-    this.emitAgentsOnlineSnapshot();
+    this.emitAgentsOnlineSnapshot(tenantId);
   }
 
-  private markAgentDisconnected(socketId: string) {
+  private markAgentDisconnected(socketId: string, tenantId: string) {
     const agentId = this.socketToAgentId.get(socketId);
     if (!agentId) {
       return;
@@ -152,13 +166,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const current = this.agentOnlineSocketCount.get(agentId) ?? 0;
     if (current <= 1) {
       this.agentOnlineSocketCount.delete(agentId);
-      this.emitAgentStatusChanged({ agentId, isOnline: false });
-      this.emitAgentsOnlineSnapshot();
+      const tenantAgents = this.tenantToOnlineAgentIds.get(tenantId);
+      if (tenantAgents) {
+        tenantAgents.delete(agentId);
+        if (tenantAgents.size === 0) {
+          this.tenantToOnlineAgentIds.delete(tenantId);
+        }
+      }
+      this.emitAgentStatusChanged({ agentId, isOnline: false }, tenantId);
+      this.emitAgentsOnlineSnapshot(tenantId);
       return;
     }
 
     this.agentOnlineSocketCount.set(agentId, current - 1);
-    this.emitAgentsOnlineSnapshot();
+    this.emitAgentsOnlineSnapshot(tenantId);
   }
 
   emitSessionMessage(sessionId: string, message: ChatMessage) {
@@ -181,7 +202,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() payload: JoinSessionDto,
   ) {
     await this.validatePayload(payload, JoinSessionDto);
-    await this.chatService.ensureSessionExists(payload.sessionId);
+    const tenantId = (client as any).tenantId || 'chat-support-platform';
+    await this.chatService.ensureSessionExists(payload.sessionId, tenantId);
     await client.join(payload.sessionId);
   }
 
@@ -201,8 +223,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     try {
       await this.validatePayload(payload, SendMessageDto);
+      const tenantId = (client as any).tenantId || 'chat-support-platform';
 
-      const message = await this.chatService.saveIncomingMessage(payload);
+      const message = await this.chatService.saveIncomingMessage(payload, tenantId);
       this.server.to(payload.sessionId).emit('new_message', { message });
     } catch (error) {
       const message =
@@ -235,10 +258,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('end_session')
-  async endSession(@MessageBody() payload: EndSessionDto) {
+  async endSession(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: EndSessionDto,
+  ) {
     await this.validatePayload(payload, EndSessionDto);
+    const tenantId = (client as any).tenantId || 'chat-support-platform';
 
-    await this.chatService.endSession(payload.sessionId);
+    await this.chatService.endSession(payload.sessionId, tenantId);
     this.emitSessionEnded(payload.sessionId);
   }
 
